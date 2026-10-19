@@ -1,0 +1,1793 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coin Scout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F0EA; --surface:#FFFFFF; --ink:#15171C; --muted:#5D636F; --line:#DCD8CE; --soft:#EAE6DC;
+  --accent:#2E62F0; --up:#0B9466; --down:#D9412A; --warn:#B87B00;
+  --display:"Space Grotesk","Avenir Next",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D0F13; --surface:#15181E; --ink:#ECEEF2; --muted:#9399A5; --line:#262A33; --soft:#1C2028;
+    --accent:#7EA1FF; --up:#33D399; --down:#FF6B57; --warn:#F2B53E;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D0F13; --surface:#15181E; --ink:#ECEEF2; --muted:#9399A5; --line:#262A33; --soft:#1C2028;
+  --accent:#7EA1FF; --up:#33D399; --down:#FF6B57; --warn:#F2B53E;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font:15px/1.5 var(--body)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 16px 80px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)} .warnc{color:var(--warn)}
+
+/* header */
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font:700 1.9rem/1 var(--display);letter-spacing:-.02em;margin:0}
+.tag{font:600 .72rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 8px;border-radius:6px;background:var(--soft);color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.go{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:150px}
+.btn.go.running{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn.small{padding:5px 10px;font-size:.85rem;border-radius:8px}
+.btn.danger{color:var(--down)}
+.statusline{display:flex;gap:16px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:.88rem;margin:6px 0 18px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:1px}
+.dot.ok{background:var(--up)} .dot.err{background:var(--down)} .dot.off{background:var(--line)}
+.dot.live{background:var(--up);box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 60%,transparent);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.health span{margin-right:12px;white-space:nowrap}
+.busy{color:var(--ink)}
+
+.banner{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;margin:0 0 16px;font-size:.92rem}
+.banner.bad{border-color:color-mix(in srgb,var(--down) 45%,transparent);background:color-mix(in srgb,var(--down) 8%,var(--surface))}
+.banner b{font-weight:600}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:22px}
+.stat{background:var(--surface);padding:14px 16px}
+.stat .k{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.stat .v{font:600 1.55rem/1.2 var(--mono);margin-top:4px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:.82rem;color:var(--muted);margin-top:2px}
+.strat .stat .v{font-size:1.15rem}
+.modebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.modebar .lbl{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:8px 14px;cursor:pointer;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.seg button + button{border-left:1px solid var(--line)}
+#modeNote{font-size:.88rem}
+.bladd{display:flex;gap:8px;padding:12px 16px 4px;flex-wrap:wrap}
+.bladd input{flex:1 1 260px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-family:var(--mono);font-size:.85rem}
+.curvet{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.9rem}
+.banner .btn{margin-left:8px;padding:5px 12px}
+
+/* panels */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:18px}
+.panel > .hd{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.panel > .hd h2{font:600 1.05rem/1.2 var(--display);margin:0;margin-right:auto}
+.panel > .bd{padding:4px 0}
+.empty{padding:22px 16px;color:var(--muted);font-size:.92rem}
+.grid2{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}
+.grid2 > .panel{margin-bottom:18px;min-width:0}
+
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{text-align:left;font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+.coin b{font-weight:600}
+.coin small{display:block;color:var(--muted);font-size:.78rem}
+.why{font-size:.8rem;color:var(--muted);max-width:340px}
+.tablewrap{overflow-x:auto}
+.tablewrap table{min-width:760px}
+td.nw{white-space:nowrap}
+
+/* chart */
+.chart{padding:10px 14px 6px}
+.chart svg{display:block;width:100%;height:250px}
+
+/* feed */
+.feed{max-height:330px;overflow-y:auto;font-size:.86rem}
+.feed .sym small{display:block;font-weight:400;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.feed div{display:grid;grid-template-columns:62px 104px 1fr;gap:8px;padding:7px 14px;border-bottom:1px solid var(--line)}
+.feed div:last-child{border-bottom:0}
+.feed .t{color:var(--muted);font-family:var(--mono);font-size:.78rem;padding-top:1px}
+.feed .sym{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed .buy .x{color:var(--accent)} .feed .win .x{color:var(--up)} .feed .loss .x{color:var(--down)}
+.feed .reject .x{color:var(--ink)} .feed .wait .x,.feed .wait .sym{color:var(--muted)} .feed .error .x{color:var(--down)}
+
+/* reasons */
+.bars{padding:10px 16px 14px}
+.bar{display:grid;grid-template-columns:minmax(150px,240px) 1fr 44px 150px;gap:10px;align-items:center;font-size:.86rem;padding:4px 0}
+.bar i{display:block;height:8px;border-radius:4px;background:var(--muted);opacity:.55}
+.bar .n{text-align:right;font-family:var(--mono);color:var(--muted)}
+.bar .a{text-align:right;font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.bar.head{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+@media (max-width:520px){.bar{grid-template-columns:1fr 34px 90px}.bar i{display:none}}
+
+details.how{margin-bottom:18px}
+details.how summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+details.how ol{margin:10px 0 0;padding-left:20px;color:var(--muted);font-size:.9rem;max-width:80ch}
+details.how li{margin-bottom:4px}
+
+/* settings dialog */
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:0;width:min(680px,calc(100vw - 32px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg-hd{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
+.dlg-hd h2{font:600 1.2rem var(--display);margin:0;margin-right:auto}
+.dlg-bd{padding:6px 20px 10px}
+.dlg-ft{display:flex;gap:10px;flex-wrap:wrap;padding:14px 20px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--surface)}
+.dlg-ft .sp{margin-right:auto}
+fieldset{border:0;padding:0;margin:16px 0 4px}
+legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;padding:0}
+.f{display:grid;grid-template-columns:1fr 150px;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.f label{font-size:.92rem}
+.f .h{display:block;font-size:.8rem;color:var(--muted)}
+.f .in{display:flex;align-items:center;gap:6px}
+.f .in span{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.f input[type=number],.f input[type=password],.f input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-family:var(--mono);font-size:.9rem}
+.f.wide{grid-template-columns:1fr}
+.f input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);justify-self:end}
+
+@media (max-width:900px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat:last-child{grid-column:span 2}
+  .grid2{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .stats{grid-template-columns:1fr 1fr}
+  .stat .v{font-size:1.25rem}
+  .f{grid-template-columns:1fr}
+  .feed div{grid-template-columns:52px 70px 1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v7 · Oct 18</span></div>
+  <button class="btn go" id="goBtn">Start scouting</button>
+  <button class="btn" id="setBtn">Settings</button>
+  <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
+</header>
+<div class="statusline">
+  <span id="runState"><span class="dot"></span>Paused</span>
+  <span id="busy" class="busy"></span>
+  <span class="health" id="health"></span>
+  <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="wake"> Keep this Mac awake while running</label>
+</div>
+
+<div id="banners"></div>
+
+<div class="stats" id="stats"></div>
+
+<div class="modebar">
+  <span class="lbl">Selling style</span>
+  <div class="seg" role="group" aria-label="Selling style">
+    <button data-mode="quick" id="mQuick">Quick flips</button>
+    <button data-mode="run" id="mRun">Let winners run</button>
+  </div>
+  <span class="muted" id="modeNote"></span>
+  <label class="curvet"><input type="checkbox" id="curveT"> Also trade coins still on pump.fun <span class="muted">(riskier)</span></label>
+</div>
+
+<div class="stats strat" id="strat"></div>
+
+<details class="how">
+  <summary>How Coin Scout works</summary>
+  <ol>
+    <li>Every 30 seconds it pulls the newest Solana trading pools from GeckoTerminal. Anything older than your age limit is skipped instantly.</li>
+    <li><b>Quick checks</b> (free): age, liquidity, market cap, trading volume, whether buyers outnumber sellers, and whether it already pumped.</li>
+    <li><b>Safety checks</b> (RugCheck): can the creator still print coins or freeze wallets, is the liquidity locked, do a few wallets own too much.</li>
+    <li><b>Deep check</b> (your Token Detective, needs a Helius key): finds wallets secretly linked to each other or to the creator, and launch-block bundles.</li>
+    <li>If a coin passes everything, it makes a <b>fake</b> buy priced with a real Jupiter quote (what you'd actually get, and which exchange it goes through), then watches it every few seconds and sells by your rules: either a quick flip at a set dollar profit, or letting winners run.</li>
+    <li><b>Deployer blacklist:</b> when a coin rugs, the wallet that made it is blocked (and whoever funded that wallet). Deployers whose coins keep crashing get blocked too.</li>
+    <li>Coins that fail only because they're too new or too quiet get rechecked every 5 minutes for about 90 minutes.</li>
+    <li>Leave this tab open in its own window (not minimized). Browsers slow down hidden tabs, and nothing runs while the page is closed.</li>
+  </ol>
+</details>
+
+<section class="panel">
+  <div class="hd"><h2>Open trades</h2><span class="muted" id="openNote"></span></div>
+  <div class="bd tablewrap" id="open"></div>
+</section>
+
+<div class="grid2">
+  <section class="panel">
+    <div class="hd"><h2>Fake balance over time</h2><span class="muted num" id="eqNote"></span></div>
+    <div class="chart" id="chart"></div>
+  </section>
+  <section class="panel">
+    <div class="hd"><h2>What it's doing</h2><label class="muted" style="font-size:.85rem;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="showAll"> Show every check</label></div>
+    <div class="feed" id="feed"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="hd"><h2>Trade journal</h2><button class="btn small" id="csvBtn">Download CSV</button><button class="btn small" id="dataBtn">Download all data</button></div>
+  <div class="bd tablewrap" id="journal"></div>
+</section>
+
+<section class="panel">
+  <div class="hd"><h2>Deployer blacklist</h2><span class="muted" id="blNote"></span></div>
+  <div class="bladd"><input type="text" id="blInput" placeholder="Paste a wallet address to block it" spellcheck="false" autocomplete="off"><button class="btn small" id="blBtn">Add to blacklist</button></div>
+  <div class="bd tablewrap" id="blist"></div>
+</section>
+
+<section class="panel" style="display:none">
+  <div class="hd"><h2>Should the target be bigger?</h2></div>
+  <div class="bd tablewrap" id="whatif"></div>
+</section>
+
+<section class="panel">
+  <div class="hd"><h2>Why coins were skipped</h2><span class="muted" id="rejNote"></span></div>
+  <div class="bars" id="rejects"></div>
+</section>
+
+</div>
+
+<dialog id="dlg">
+  <div class="dlg-hd"><h2>Settings</h2><button class="btn small" id="dlgX">Close</button></div>
+  <form class="dlg-bd" id="form" onsubmit="return false"></form>
+  <div class="dlg-ft">
+    <button class="btn danger sp" id="resetBtn" title="The blacklist is kept">Reset balance and journal</button>
+    <button class="btn" id="defBtn">Back to defaults</button>
+    <button class="btn go" id="saveBtn">Save</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
+const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
+const VERSION = 'v7 · Oct 18';
+/* =====================================================================
+   Coin Scout: scans new Solana coins, checks them, and paper-trades.
+   No wallet, no real money. Deep check is a trimmed copy of Token Detective.
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const now = () => Date.now();
+const LS = 'coinscout:';
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(LS + k)); }catch(e){ return null; } },
+  set(k, v){ try{ localStorage.setItem(LS + k, JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+const SYS = '11111111111111111111111111111111';
+const WSOL = 'So11111111111111111111111111111111111111112';
+const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const STABLE = new Set([WSOL, USDC, USDT]);
+class UserError extends Error {}
+
+/* ---------------- settings ---------------- */
+const FIELDS = [
+  {g:'Money', k:'startCash', l:'Starting fake balance', u:'$', d:1000},
+  {k:'tradeSize', l:'Amount per trade', u:'$', d:50},
+  {k:'maxOpen', l:'Most trades open at once', d:5},
+  {g:'When to sell', k:'tpUsd', l:'Quick flip: sell everything once the profit reaches', u:'$', d:0, h:'Counted after fees and slippage. 0 turns quick flips off.'},
+  {k:'takeProfit', l:'Take profit when up', u:'%', d:100},
+  {k:'halfAtTP', l:'At take profit, sell half and let the rest ride', t:'check', d:true, h:'After selling half, the stop on the rest moves up to your buy price, so that trade can no longer lose.'},
+  {k:'stopLoss', l:'Stop loss when down', u:'%', d:35},
+  {k:'trailStart', l:'Turn on the trailing stop once up', u:'%', d:40},
+  {k:'trail', l:'Trailing stop: sell if it falls this far from its high', u:'%', d:25},
+  {k:'maxHoldMin', l:'Sell anyway after', u:'min', d:360},
+  {k:'priceEvery', l:'Check open trades every', u:'sec', d:5, h:'Faster checks catch small targets before they slip away.'},
+  {k:'liqPull', l:'Sell if the pool loses this much more than the price explains', u:'%', d:35, h:'A sudden drop in the pool usually means someone is pulling the money out.'},
+  {k:'dumpExit', l:'Sell if big holders start dumping', t:'check', d:true, h:'Rechecks the biggest wallets every 3 minutes.'},
+  {g:'Which coins to look at', k:'minAgeMin', l:'Coin must be at least', u:'min old', d:10},
+  {k:'maxAgeHr', l:'Ignore coins older than', u:'hours', d:24},
+  {k:'minLiq', l:'Minimum liquidity', u:'$', d:15000},
+  {k:'minMcap', l:'Minimum market cap', u:'$', d:30000},
+  {k:'maxMcap', l:'Maximum market cap', u:'$', d:3000000},
+  {k:'minVol1h', l:'Minimum trading in the last hour', u:'$', d:15000},
+  {k:'maxPump1h', l:'Skip if already up more than this in the last hour', u:'%', d:400},
+  {k:'needBuyers', l:'Only buy when buyers outnumber sellers (last hour)', t:'check', d:true},
+  {k:'allowCurve', l:'Include coins still on the pump.fun curve', t:'check', d:false, h:'Riskier, and the liquidity number is an estimate.'},
+  {g:'Safety checks', k:'maxTop10', l:'Top 10 wallets can own at most', u:'%', d:30, h:'Not counting the trading pool.'},
+  {k:'maxOneHolder', l:'One wallet can own at most', u:'%', d:8},
+  {k:'minLpLocked', l:'Liquidity locked or burned, at least', u:'%', d:90},
+  {k:'maxCreatorHold', l:'Creator can still hold at most', u:'%', d:3},
+  {k:'rejectDanger', l:'Skip coins with any RugCheck "danger" warning', t:'check', d:true},
+  {k:'rejectInsiders', l:'Skip coins where RugCheck finds insider wallets', t:'check', d:true},
+  {g:'Deep check (your Token Detective)', k:'heliusKey', l:'Helius API key', t:'password', d:'', h:'Optional. Without it the deep check is skipped. Same key as Token Detective (dashboard.helius.dev).', wide:true},
+  {k:'useDeep', l:'Run the deep check before buying', t:'check', d:true},
+  {k:'maxLinked', l:'Linked wallet groups can hold at most', u:'%', d:10},
+  {k:'maxCreatorGroup', l:"Creator's group can hold at most", u:'%', d:3},
+  {k:'maxBundled', l:'Skip if at least this many wallets bought in the launch block', d:2},
+  {k:'deepPerHour', l:'Most deep checks per hour', d:8, h:'Each one uses Helius credits.'},
+  {g:'Deployer blacklist', k:'blAuto', l:'Blacklist deployers automatically', t:'check', d:true, h:'A coin that clearly rugs gets its deployer blacklisted right away.'},
+  {k:'blStrikes', l:'Also blacklist a deployer after this many of their coins crash 90%+', d:2},
+  {k:'blFunders', l:'Also blacklist whoever funded a blacklisted deployer', t:'check', d:true, h:'Needs your Helius key. Exchanges are left out.'},
+  {g:'Costs (keeps fake trades realistic)', k:'swapFee', l:'Trading fee on each buy and sell', u:'%', d:1},
+  {k:'netFee', l:'Network and priority fee per trade', u:'$', d:0.3},
+];
+{ let g = ''; for (const f of FIELDS){ if (f.g) g = f.g; else f.g = g; } }
+const DEF = Object.fromEntries(FIELDS.map(f => [f.k, f.d]));
+const PRESETS = {
+  quick:{tpUsd:5, stopLoss:10, halfAtTP:false, trailStart:12, trail:5, maxHoldMin:30, maxOpen:8, minAgeMin:5},
+  run:{tpUsd:0, stopLoss:35, halfAtTP:true, trailStart:40, trail:25, maxHoldMin:360, maxOpen:5, minAgeMin:10}
+};
+let CFG = Object.assign({}, DEF, store.get('cfg') || {});
+
+/* ---------------- state ---------------- */
+function fresh(){
+  return {cash:+CFG.startCash, start:+CFG.startCash, positions:[], trades:[], seen:{}, log:[], rejects:{},
+    equity:[[now(), +CFG.startCash]], stats:{seen:0, quick:0, deep:0, bought:0}, deepTimes:[], running:false, lastScan:0, solUsd:150};
+}
+let S = Object.assign(fresh(), store.get('state') || {});
+S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
+let saveT = null, saveWarned = false;
+function save(){
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    prune();
+    if (!store.set('state', S) && !saveWarned){ saveWarned = true; feed('error', '', "Couldn't save to this browser's storage. Your journal will be lost if you close the page."); }
+  }, 400);
+}
+function prune(){
+  const keys = Object.keys(S.seen);
+  if (keys.length > 4000){
+    keys.filter(k => !['new','waiting'].includes(S.seen[k].status)).sort((a, b) => S.seen[a].first - S.seen[b].first)
+      .slice(0, keys.length - 3000).forEach(k => delete S.seen[k]);
+  }
+  if (S.log.length > 250) S.log.length = 250;
+  if (S.equity.length > 3000) S.equity = S.equity.filter((_, i) => i % 2 === 0 || i > S.equity.length - 500);
+}
+
+/* ---------------- formatting ---------------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const usd = v => v == null || isNaN(v) ? '—' : Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : Math.abs(v) >= 1e3 ? '$' + (v / 1e3).toFixed(1) + 'K' : '$' + v.toFixed(2);
+const dollars = v => '$' + (+v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+const money = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(2);
+const price = v => !v ? '—' : v >= 1 ? '$' + v.toFixed(4) : '$' + v.toPrecision(4);
+const pctS = x => { const p = x * 100; return (p >= 0 ? '+' : '−') + Math.abs(p).toFixed(Math.abs(p) >= 100 ? 0 : 1) + '%'; };
+const pctN = p => (p >= 10 ? p.toFixed(0) : p.toFixed(1)) + '%';
+const cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const ago = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + 's' : s < 3600 ? Math.round(s / 60) + 'm' : s < 172800 ? (s / 3600).toFixed(s < 36000 ? 1 : 0) + 'h' : Math.round(s / 86400) + 'd'; };
+const clock = t => new Date(t).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+const short = a => a ? a.slice(0, 4) + '…' + a.slice(-4) : '—';
+
+/* ---------------- feed ---------------- */
+const tagOf = mint => mint ? mint.slice(0, 4) : '';
+function feed(kind, sym, text, tag){
+  S.log.unshift({t:now(), kind, sym:sym || '', text, tag:tag || ''});
+  if (S.log.length > 250) S.log.length = 250;
+  renderFeed(); save();
+}
+
+/* ---------------- web requests ---------------- */
+const HOST = {gt:{gap:2200, next:0, name:'New coins'}, ds:{gap:260, next:0, name:'Prices'}, rc:{gap:900, next:0, name:'RugCheck'}, jup:{gap:1100, next:0, name:'Jupiter'}};
+const HEALTH = {gt:null, ds:null, rc:null, jup:null, hel:null};
+const HEALTH_MSG = {};
+function health(h, st, msg){ HEALTH[h] = st; HEALTH_MSG[h] = msg || ''; renderHealth(); }
+async function getJSON(h, url){
+  let last = '';
+  for (let a = 0; a < 4; a++){
+    const H = HOST[h], t = now(), at = Math.max(t, H.next);
+    H.next = at + H.gap;
+    if (at > t) await sleep(at - t);
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 15000);
+    try{
+      const r = await fetch(url, {signal:ctl.signal, headers:{accept:'application/json'}});
+      clearTimeout(to);
+      if (r.status === 404 || r.status === 400){ health(h, 'ok'); return null; }
+      if (r.status === 429){ H.gap = Math.min(Math.round(H.gap * 1.6), 10000); last = 'asked us to slow down'; await sleep(3000 * (a + 1)); continue; }
+      if (!r.ok){ last = 'error ' + r.status; await sleep(1500 * (a + 1)); continue; }
+      const j = await r.json();
+      health(h, 'ok');
+      if (H.gap > 300 && h === 'ds') H.gap = Math.max(260, Math.round(H.gap * 0.9));
+      return j;
+    }catch(e){
+      clearTimeout(to);
+      last = e.name === 'AbortError' ? 'timed out' : (e.message || 'network error');
+      await sleep(1500 * (a + 1));
+    }
+  }
+  health(h, 'err', last);
+  throw new Error(HOST[h].name + ': ' + last);
+}
+
+/* ---------------- finding new coins ---------------- */
+let scanning = false, lastScanErr = '';
+async function scanSources(){
+  if (scanning) return; scanning = true;
+  const found = [];
+  let errs = [];
+  try{
+    for (const page of [1, 2]){
+      try{
+        const j = await getJSON('gt', 'https://api.geckoterminal.com/api/v2/networks/solana/new_pools?include=base_token&page=' + page);
+        for (const p of (j && j.data) || []){
+          const rel = p.relationships || {};
+          let mint = ((rel.base_token && rel.base_token.data && rel.base_token.data.id) || '').replace(/^solana_/, '');
+          if (STABLE.has(mint)) mint = ((rel.quote_token && rel.quote_token.data && rel.quote_token.data.id) || '').replace(/^solana_/, '');
+          if (!mint || STABLE.has(mint)) continue;
+          found.push({mint, sym:((p.attributes && p.attributes.name) || '').split(' / ')[0], src:'GeckoTerminal'});
+        }
+      }catch(e){ errs.push(e.message); break; }
+    }
+    for (const u of []){   // DexScreener promoted lists removed: mostly old coins
+      try{
+        const j = await getJSON('ds', u);
+        for (const x of Array.isArray(j) ? j : []) if (x.chainId === 'solana' && x.tokenAddress && !STABLE.has(x.tokenAddress)) found.push({mint:x.tokenAddress, sym:'', src:'DexScreener'});
+      }catch(e){ errs.push(e.message); }
+    }
+    let added = 0;
+    for (const f of found){
+      if (S.seen[f.mint]) continue;
+      S.seen[f.mint] = {mint:f.mint, sym:f.sym, src:f.src, status:'new', first:now(), next:now(), tries:0, reason:''};
+      added++; S.stats.seen++;
+    }
+    S.lastScan = now();
+    const errMsg = errs.join(' · ');
+    if (errMsg && errMsg !== lastScanErr) feed('error', '', "Couldn't reach a coin source: " + errMsg + '. Will keep trying.');
+    lastScanErr = errMsg;
+    save(); renderStatus();
+  } finally { scanning = false; }
+}
+
+async function solPrice(){
+  try{
+    const j = await getJSON('ds', 'https://api.dexscreener.com/tokens/v1/solana/' + WSOL);
+    const p = (Array.isArray(j) ? j : []).filter(x => x.baseToken && x.baseToken.address === WSOL && /USDC|USDT/.test((x.quoteToken || {}).symbol || ''))
+      .sort((a, b) => ((b.liquidity || {}).usd || 0) - ((a.liquidity || {}).usd || 0))[0];
+    if (p && +p.priceUsd > 0) S.solUsd = +p.priceUsd;
+  }catch(e){}
+}
+
+/* ---------------- market data ---------------- */
+function mk(p){
+  const tx = (p.txns && p.txns.h1) || {};
+  return {
+    price:+p.priceUsd || 0, liq:(p.liquidity && p.liquidity.usd != null) ? +p.liquidity.usd : null,
+    mcap:+(p.marketCap || p.fdv || 0), vol1h:+((p.volume && p.volume.h1) || 0),
+    ch5m:+((p.priceChange && p.priceChange.m5) || 0), ch1h:+((p.priceChange && p.priceChange.h1) || 0),
+    buys1h:+(tx.buys || 0), sells1h:+(tx.sells || 0), created:+(p.pairCreatedAt || 0),
+    dex:p.dexId || '', url:p.url || '', sym:(p.baseToken && p.baseToken.symbol) || '', name:(p.baseToken && p.baseToken.name) || '', pair:p.pairAddress || ''
+  };
+}
+async function dsPairs(mints){
+  const best = new Map();
+  const uniq = [...new Set(mints)];
+  for (let i = 0; i < uniq.length; i += 30){
+    const part = uniq.slice(i, i + 30), want = new Set(part);
+    const j = await getJSON('ds', 'https://api.dexscreener.com/tokens/v1/solana/' + part.join(','));
+    for (const p of Array.isArray(j) ? j : []){
+      const b = p.baseToken && p.baseToken.address;
+      if (!want.has(b)) continue;
+      const cur = best.get(b), L = (p.liquidity && p.liquidity.usd) || 0;
+      if (!cur || L > ((cur.liquidity && cur.liquidity.usd) || 0)) best.set(b, p);
+    }
+  }
+  const out = new Map();
+  for (const [k, p] of best) out.set(k, withLiq(mk(p)));
+  return out;
+}
+/* pump.fun curve coins have no liquidity number; estimate it from the curve's virtual reserves */
+function withLiq(m){
+  if (m.liq == null && m.dex === 'pumpfun' && m.mcap > 0){
+    m.liq = 2 * Math.sqrt(32.19 * m.mcap * (S.solUsd || 150));
+    m.curve = true;
+  }
+  return m;
+}
+
+/* ---------------- quick checks ---------------- */
+const soft = (key, detail) => ({ok:false, hard:false, key, detail:detail || ''});
+const hard = (key, detail) => ({ok:false, hard:true, key, detail:detail || ''});
+function quick(m){
+  const age = m.created ? (now() - m.created) / 60000 : null;
+  if (m.curve && !CFG.allowCurve) return soft('Still on the pump.fun curve', 'not graduated yet');
+  if (m.liq == null) return soft('No liquidity number yet');
+  if (age != null && age > CFG.maxAgeHr * 60) return hard('Too old', ago(now() - m.created) + ' old');
+  if (age != null && age < CFG.minAgeMin) return soft('Too new', Math.round(age) + ' min old');
+  if (m.liq < CFG.minLiq) return soft('Low liquidity', usd(m.liq));
+  if (m.mcap < CFG.minMcap) return soft('Market cap too small', usd(m.mcap));
+  if (m.mcap > CFG.maxMcap) return soft('Market cap too big', usd(m.mcap));
+  if (m.vol1h < CFG.minVol1h) return soft('Not enough trading', usd(m.vol1h) + ' in the last hour');
+  if (m.ch1h > CFG.maxPump1h) return soft('Already pumped too much', pctS(m.ch1h / 100) + ' in the last hour');
+  if (CFG.needBuyers && m.buys1h < m.sells1h) return soft('More sellers than buyers', m.buys1h + ' buys vs ' + m.sells1h + ' sells');
+  if (m.ch5m < -10) return soft('Dropping right now', pctS(m.ch5m / 100) + ' in 5 min');
+  return {ok:true};
+}
+
+/* ---------------- RugCheck safety checks ---------------- */
+function holderInfo(r){
+  const skip = new Set();
+  for (const mk of r.markets || []){
+    [mk.pubkey, mk.liquidityA, mk.liquidityB, mk.liquidityAAccount && mk.liquidityAAccount.owner, mk.liquidityBAccount && mk.liquidityBAccount.owner].forEach(x => x && skip.add(x));
+  }
+  for (const [a, k] of Object.entries(r.knownAccounts || {})) if (/AMM|LOCK|POOL|BURN/i.test((k && k.type) || '')) skip.add(a);
+  const list = (r.topHolders || []).filter(x => !skip.has(x.owner) && !skip.has(x.address));
+  const top10 = list.slice(0, 10).reduce((s, x) => s + (+x.pct || 0), 0);
+  const maxOne = list.length ? Math.max(...list.map(x => +x.pct || 0)) : 0;
+  const supply = +((r.token && r.token.supply) || 0);
+  const creatorPct = supply ? 100 * (+r.creatorBalance || 0) / supply : 0;
+  let lpLocked = null, bestQ = -1;
+  for (const mk of r.markets || []){
+    const lp = mk.lp; if (!lp) continue;
+    const q = +lp.quoteUSD || 0;
+    if (q > bestQ){ bestQ = q; lpLocked = lp.lpLockedPct != null ? +lp.lpLockedPct : null; }
+  }
+  const owners = {};
+  for (const x of list) owners[x.owner] = (owners[x.owner] || 0) + (+x.pct || 0);
+  const minListed = (r.topHolders || []).length ? Math.min(...r.topHolders.map(x => +x.pct || 0)) : 0;
+  return {top10, maxOne, creatorPct, lpLocked, owners, minListed, holders:r.totalHolders || 0};
+}
+function rugEval(r, m){
+  if (!r) return soft('RugCheck has no report yet');
+  if (r.rugged) return hard('RugCheck says it already rugged');
+  const mintA = r.mintAuthority !== undefined ? r.mintAuthority : (r.token && r.token.mintAuthority);
+  const frz = r.freezeAuthority !== undefined ? r.freezeAuthority : (r.token && r.token.freezeAuthority);
+  if (mintA) return hard('Creator can still print more coins');
+  if (frz) return hard('Creator can freeze wallets');
+  if (CFG.rejectDanger){
+    const d = (r.risks || []).find(x => x.level === 'danger');
+    if (d) return hard('RugCheck danger: ' + d.name, d.description || '');
+  }
+  const h = holderInfo(r);
+  if (!m.curve && h.lpLocked != null && h.lpLocked < CFG.minLpLocked) return hard('Liquidity not locked', pctN(h.lpLocked) + ' locked');
+  if (h.top10 > CFG.maxTop10) return hard('Top 10 wallets own too much', pctN(h.top10));
+  if (h.maxOne > CFG.maxOneHolder) return hard('One wallet owns too much', pctN(h.maxOne));
+  if (h.creatorPct > CFG.maxCreatorHold) return hard('Creator still holds a lot', pctN(h.creatorPct));
+  if (CFG.rejectInsiders && +r.graphInsidersDetected > 0) return hard('RugCheck found insider wallets', r.graphInsidersDetected + ' found');
+  return {ok:true, h};
+}
+
+/* =====================================================================
+   DEEP CHECK — trimmed copy of Token Detective's investigation
+   ===================================================================== */
+const DC = {LAUNCH_TXS:200, EARLY_PICK:15, HOLDER_PICK:12, MAX_WALLETS:40, MAX_HOPS:1, WALLET_PAGES:1, EXCHANGE_FANOUT:25, LAUNCH_SIG_PAGES:12, FALLBACK_TX_CAP:150, HOLDER_PAGES:2};
+let MINT = '', MODE = 'gtfa', CALLS = 0, DEC = 6, SUPPLY = 1, DEEP_OFF = '';
+const MARKET = new Map(), TA = new Map(), TXS = new Map();
+
+let nextSlot = 0, GAP = 350, okStreak = 0;
+async function pace(){ const t = now(), at = Math.max(t, nextSlot); nextSlot = at + GAP; if (at > t) await sleep(at - t); }
+const URL_RPC = () => 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(CFG.heliusKey);
+async function post(body){
+  const method = Array.isArray(body) ? (body[0] && body[0].method) + ' ×' + body.length : body.method;
+  let lastMsg = '';
+  for (let a = 0; a < 8; a++){
+    await pace(); CALLS++;
+    let r;
+    try{ r = await fetch(URL_RPC(), {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}); }
+    catch(e){ if (a < 2){ await sleep(1500); continue; } throw new Error("Couldn't reach Helius (" + e.message + ')'); }
+    if (r.status === 401 || r.status === 403) throw new UserError('Helius rejected the API key. Copy it again from dashboard.helius.dev and paste it into Settings.');
+    let txt = ''; try{ txt = await r.text(); }catch(e){}
+    let j = null; try{ j = JSON.parse(txt); }catch(e){}
+    const errMsg = (j && !Array.isArray(j) && j.error && j.error.message) || '';
+    const limited = r.status === 429 || /rate.?limit|too many|limit exceeded|slow down/i.test(errMsg) ||
+      (Array.isArray(j) && j.some(x => x && x.error && /rate.?limit|too many|limit exceeded/i.test(x.error.message || '')));
+    if (limited){
+      lastMsg = errMsg || txt.slice(0, 200) || 'HTTP ' + r.status;
+      if (/credit|quota|exceeded your/i.test(lastMsg)) throw new UserError('Your Helius plan is out of credits for now: ' + lastMsg);
+      GAP = Math.min(3000, Math.round(GAP * 1.7)); okStreak = 0;
+      if (!Array.isArray(body) && body.method === 'getTransactionsForAddress' && a >= 2){ const e = new Error('limited: ' + lastMsg); e.code = -32601; throw e; }
+      const ra = parseFloat(r.headers.get('retry-after'));
+      await sleep(ra > 0 ? Math.min(60000, ra * 1000) : Math.min(20000, 1500 * 2 ** a));
+      continue;
+    }
+    if (r.status >= 500 || !j){ lastMsg = 'HTTP ' + r.status + ' ' + txt.slice(0, 200); if (a < 4){ await sleep(2000 * (a + 1)); continue; } throw new Error('Helius error: ' + lastMsg + ' (' + method + ')'); }
+    if (++okStreak >= 20){ GAP = Math.max(150, Math.round(GAP * 0.85)); okStreak = 0; }
+    health('hel', 'ok');
+    return j;
+  }
+  throw new Error('Helius kept asking us to slow down: ' + lastMsg);
+}
+async function rpc(method, params){
+  const j = await post({jsonrpc:'2.0', id:1, method, params});
+  if (j.error){ const e = new Error(j.error.message || 'Helius error'); e.code = j.error.code; throw e; }
+  return j.result;
+}
+async function rpcBatch(calls){
+  if (!calls.length) return [];
+  const out = [];
+  for (let i = 0; i < calls.length; i += 5){
+    const chunk = calls.slice(i, i + 5);
+    const j = await post(chunk.map((c, k) => ({jsonrpc:'2.0', id:k, method:c.method, params:c.params})));
+    const arr = Array.isArray(j) ? j : [j];
+    const byId = new Map(arr.map(x => [x.id, x.result]));
+    chunk.forEach((c, k) => out.push(byId.get(k) ?? null));
+  }
+  return out;
+}
+function planError(e){ return e.code === -32601 || /plan|upgrade|not (available|supported|enabled)|access|method not found|forbidden/i.test(e.message || ''); }
+const TXOPTS = {encoding:'json', maxSupportedTransactionVersion:0};
+async function gtfa(addr, opts, pages){
+  const all = []; let token = null;
+  for (let p = 0; p < pages; p++){
+    const res = await rpc('getTransactionsForAddress', [addr, Object.assign({transactionDetails:'full'}, TXOPTS, opts, token ? {paginationToken:token} : {})]);
+    const data = (res && res.data) || [];
+    all.push(...data);
+    token = res && res.paginationToken;
+    if (!token || !data.length) break;
+  }
+  return all;
+}
+async function sigsAll(addr, maxPages){
+  let before, all = [];
+  for (let p = 0; p < maxPages; p++){
+    const r = await rpc('getSignaturesForAddress', [addr, Object.assign({limit:1000}, before ? {before} : {})]);
+    all.push(...r);
+    if (r.length < 1000) return {sigs:all, capped:false};
+    before = r[r.length - 1].signature;
+  }
+  return {sigs:all, capped:true};
+}
+async function getTxs(sigs){ return (await rpcBatch(sigs.map(s => ({method:'getTransaction', params:[s, TXOPTS]})))).filter(Boolean); }
+async function tryGtfa(fn, fallback){
+  if (MODE === 'gtfa'){
+    try{ return await fn(); }
+    catch(e){ if (e instanceof UserError) throw e; if (planError(e)) MODE = 'std'; else throw e; }
+  }
+  return fallback();
+}
+class TooBusy extends Error {}
+async function launchTxs(){
+  return tryGtfa(
+    () => gtfa(MINT, {sortOrder:'asc', limit:DC.LAUNCH_TXS, filters:{status:'succeeded'}}, 1),
+    async () => {
+      const {sigs, capped} = await sigsAll(MINT, DC.LAUNCH_SIG_PAGES);
+      if (capped) throw new TooBusy('too much history to read the launch on your Helius plan');
+      return getTxs(sigs.filter(s => !s.err).slice(-DC.LAUNCH_TXS).reverse().map(s => s.signature));
+    });
+}
+async function walletTokenTxs(w){
+  return tryGtfa(
+    async () => {
+      const base = {sortOrder:'asc', limit:500};
+      let rows = await gtfa(w, Object.assign({}, base, {filters:{status:'succeeded', tokenAccounts:'balanceChanged', tokenTransfer:{mint:MINT}}}), DC.WALLET_PAGES);
+      if (!rows.length) rows = await gtfa(w, Object.assign({}, base, {filters:{status:'succeeded', tokenAccounts:'balanceChanged'}}), 1);
+      return rows;
+    },
+    async () => {
+      const sigs = new Set();
+      for (const a of [...(TA.get(w) || [])]){ const {sigs:s} = await sigsAll(a, 1); s.filter(x => !x.err).forEach(x => sigs.add(x.signature)); }
+      return getTxs([...sigs].filter(s => !TXS.has(s)).slice(0, DC.FALLBACK_TX_CAP));
+    });
+}
+async function walletFirstTxs(w){
+  return tryGtfa(
+    () => gtfa(w, {sortOrder:'asc', limit:6, filters:{status:'succeeded'}}, 1),
+    async () => {
+      const {sigs, capped} = await sigsAll(w, 2);
+      if (capped) return [];
+      return getTxs(sigs.filter(s => !s.err).slice(-4).reverse().map(s => s.signature));
+    });
+}
+async function resolveMarkets(owners){
+  const todo = [...new Set(owners)].filter(o => o && !MARKET.has(o));
+  for (let i = 0; i < todo.length; i += 100){
+    const part = todo.slice(i, i + 100);
+    const r = await rpc('getMultipleAccounts', [part, {encoding:'base64', dataSlice:{offset:0, length:0}}]);
+    ((r && r.value) || []).forEach((acc, k) => MARKET.set(part[k], !!(acc && acc.owner && acc.owner !== SYS)));
+  }
+}
+const isMarket = o => MARKET.get(o) === true;
+const KNOWN_SERVICES = {
+  '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1':'Raydium pool',
+  'GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL':'Raydium pool',
+  '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg':'Pump.fun migration',
+  'CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM':'Pump.fun fees',
+  'TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM':'Pump.fun',
+  'Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1':'Pump.fun'
+};
+function norm(raw){
+  if (!raw || !raw.meta || raw.meta.err || !raw.transaction) return null;
+  const sig = raw.transaction.signatures[0];
+  if (TXS.has(sig)) return TXS.get(sig);
+  const m = raw.transaction.message, meta = raw.meta;
+  const keys = [...m.accountKeys.map(k => typeof k === 'string' ? k : k.pubkey),
+    ...((meta.loadedAddresses && meta.loadedAddresses.writable) || []),
+    ...((meta.loadedAddresses && meta.loadedAddresses.readonly) || [])];
+  const sol = {};
+  meta.preBalances.forEach((p, i) => { const d = meta.postBalances[i] - p; if (d) sol[keys[i]] = (sol[keys[i]] || 0) + d; });
+  const acc = {};
+  for (const b of meta.preTokenBalances || []) acc[b.accountIndex] = {owner:b.owner, mint:b.mint, pre:+b.uiTokenAmount.amount, post:0};
+  for (const b of meta.postTokenBalances || []){
+    const a = acc[b.accountIndex] || (acc[b.accountIndex] = {owner:b.owner, mint:b.mint, pre:0, post:0});
+    a.post = +b.uiTokenAmount.amount; a.owner = a.owner || b.owner;
+  }
+  const tok = {}, wsol = {};
+  for (const [i, a] of Object.entries(acc)){
+    if (!a.owner) continue;
+    const d = a.post - a.pre;
+    if (a.mint === MINT){
+      if (!TA.has(a.owner)) TA.set(a.owner, new Set());
+      TA.get(a.owner).add(keys[i]);
+      if (d) tok[a.owner] = (tok[a.owner] || 0) + d;
+    } else if (a.mint === WSOL && d) wsol[a.owner] = (wsol[a.owner] || 0) + d;
+  }
+  const t = {sig, slot:raw.slot, time:raw.blockTime || 0, payer:keys[0], sol, tok, wsol, keys};
+  TXS.set(sig, t);
+  return t;
+}
+function eventFor(tx, w){
+  const d = tx.tok[w]; if (!d) return null;
+  const solCh = ((tx.sol[w] || 0) + (tx.wsol[w] || 0)) / 1e9;
+  const cps = Object.entries(tx.tok).filter(([o, v]) => o !== w && Math.sign(v) === -Math.sign(d)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const mkt = cps.some(([o]) => isMarket(o));
+  let type;
+  if (d > 0 && solCh < -0.01) type = 'buy';
+  else if (d < 0 && solCh > 0.01) type = 'sell';
+  else if (!cps.length) type = d > 0 ? 'in' : 'out';
+  else if (mkt) type = d > 0 ? (solCh < 0 ? 'buy' : 'in') : (solCh > 0 ? 'sell' : 'out');
+  else type = d > 0 ? 'in' : 'out';
+  const cp = cps.length ? (cps.find(([o]) => !isMarket(o)) || cps[0])[0] : null;
+  return {sig:tx.sig, time:tx.time, slot:tx.slot, w, type, amt:Math.abs(d), sol:solCh, cp, cpMarket: cp ? (isMarket(cp) || type === 'buy' || type === 'sell') : false};
+}
+async function runPool(n, queue, fn){
+  let busy = 0, err = null;
+  await Promise.all(Array.from({length:n}, async () => {
+    while (!err){
+      const w = queue.shift();
+      if (!w){ if (busy === 0) return; await sleep(60); continue; }
+      busy++;
+      try{ await fn(w); }catch(e){ err = e; }
+      busy--;
+    }
+  }));
+  if (err) throw err;
+}
+
+async function deepCheck(mint, rep, sym){
+  MINT = mint; MARKET.clear(); TA.clear(); TXS.clear();
+  for (const k in KNOWN_SERVICES) MARKET.set(k, true);
+  const calls0 = CALLS;
+  const say = d => setBusy('Deep check on ' + (sym || short(mint)) + ': ' + d);
+
+  say('reading the token');
+  let asset = null;
+  try{ asset = await rpc('getAsset', {id:mint}); }catch(e){ if (e instanceof UserError) throw e; }
+  const ti = (asset && asset.token_info) || {};
+  if (ti.decimals == null){
+    const s = await rpc('getTokenSupply', [mint]);
+    ti.decimals = s.value.decimals; ti.supply = +s.value.amount;
+  }
+  DEC = ti.decimals; SUPPLY = +ti.supply || 1;
+
+  say('reading the launch');
+  let first;
+  try{ first = (await launchTxs()).map(norm).filter(Boolean).sort((a, b) => a.slot - b.slot); }
+  catch(e){ if (e instanceof TooBusy) return {ok:false, why:e.message, calls:CALLS - calls0}; throw e; }
+  if (!first.length) return {ok:false, why:"couldn't find the launch trades", calls:CALLS - calls0};
+  const launch = first[0];
+  const creator = launch.payer, s0 = launch.slot, t0 = launch.time;
+  await resolveMarkets(first.flatMap(t => Object.keys(t.tok)));
+
+  const early = new Map();
+  for (const t of first){
+    const fromMarket = Object.entries(t.tok).some(([o, d]) => d < 0 && isMarket(o));
+    if (!fromMarket) continue;
+    for (const [o, d] of Object.entries(t.tok)){
+      if (d <= 0 || isMarket(o)) continue;
+      const e = early.get(o) || {time:t.time, slot:t.slot, amt:0};
+      e.amt += d; early.set(o, e);
+    }
+  }
+
+  say('checking the biggest holders');
+  const holders = new Map();
+  try{
+    for (let page = 1; page <= DC.HOLDER_PAGES; page++){
+      const r = await rpc('getTokenAccounts', {mint, page, limit:1000, options:{showZeroBalance:false}});
+      const list = (r && r.token_accounts) || [];
+      for (const a of list){
+        if (!+a.amount) continue;
+        holders.set(a.owner, (holders.get(a.owner) || 0) + +a.amount);
+        if (!TA.has(a.owner)) TA.set(a.owner, new Set());
+        TA.get(a.owner).add(a.address);
+      }
+      if (list.length < 1000) break;
+    }
+  }catch(e){ if (e instanceof UserError) throw e; }
+  await resolveMarkets([...holders.keys()]);
+
+  const roles = new Map(); const addRole = (w, r) => { if (!roles.has(w)) roles.set(w, new Set()); roles.get(w).add(r); };
+  addRole(creator, 'creator');
+  const queue = [], seen = new Set(), hop = new Map();
+  const enqueue = (w, h) => { if (!w || seen.has(w) || isMarket(w) || seen.size >= DC.MAX_WALLETS) return; seen.add(w); hop.set(w, h); queue.push(w); };
+  enqueue(creator, 0);
+  for (const [w, e] of early) if (e.slot === s0 && w !== creator){ addRole(w, 'same-block'); enqueue(w, 0); }
+  [...early.entries()].sort((a, b) => b[1].amt - a[1].amt).slice(0, DC.EARLY_PICK).forEach(([w]) => { addRole(w, 'early'); enqueue(w, 0); });
+  [...holders.entries()].filter(([w]) => !isMarket(w)).sort((a, b) => b[1] - a[1]).slice(0, DC.HOLDER_PICK).forEach(([w]) => { addRole(w, 'top holder'); enqueue(w, 0); });
+  ((rep && rep.topHolders) || []).filter(h => h.insider).forEach(h => { addRole(h.owner, 'rugcheck insider'); enqueue(h.owner, 0); });
+
+  const events = new Map(), wtx = new Map();
+  await runPool(2, queue, async w => {
+    const txs = (await walletTokenTxs(w)).map(norm).filter(Boolean);
+    await resolveMarkets(txs.flatMap(t => Object.keys(t.tok)));
+    wtx.set(w, txs);
+    const ev = txs.map(t => eventFor(t, w)).filter(Boolean).sort((a, b) => a.slot - b.slot);
+    events.set(w, ev);
+    if (hop.get(w) < DC.MAX_HOPS){
+      for (const e of ev) if ((e.type === 'in' || e.type === 'out') && e.cp && !e.cpMarket && e.amt / SUPPLY > 0.0005){
+        const before = seen.size; enqueue(e.cp, hop.get(w) + 1);
+        if (seen.size > before) addRole(e.cp, 'hand-off');
+      }
+    }
+    say(events.size + ' of ' + seen.size + ' wallets read');
+  });
+
+  say('finding who paid for each wallet');
+  const funders = new Map();
+  await runPool(2, [...events.keys()], async w => {
+    const txs = (await walletFirstTxs(w)).map(norm).filter(Boolean);
+    for (const t of txs){
+      const got = t.sol[w] || 0;
+      if (got <= 0) continue;
+      let best = null, bestV = 0;
+      for (const [k, v] of Object.entries(t.sol)) if (k !== w && v < bestV){ best = k; bestV = v; }
+      if (best && -bestV >= got * 0.5){ funders.set(w, {f:best, time:t.time, sol:got / 1e9}); break; }
+    }
+  });
+  await resolveMarkets([...funders.values()].map(x => x.f));
+
+  const inS = new Map(), outS = new Map();
+  const add = (m, k, v) => { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(v); };
+  for (const [w, ev] of events) for (const e of ev) if (e.cp && !e.cpMarket){
+    if (e.type === 'in'){ add(outS, e.cp, w); add(inS, w, e.cp); }
+    if (e.type === 'out'){ add(inS, e.cp, w); add(outS, w, e.cp); }
+  }
+  const hubs = new Set();
+  for (const a of new Set([...inS.keys(), ...outS.keys()]))
+    if ((inS.get(a) ? inS.get(a).size : 0) >= 6 && (outS.get(a) ? outS.get(a).size : 0) >= 6 && a !== creator) hubs.add(a);
+  hubs.forEach(h => MARKET.set(h, true));
+  for (const h of hubs){ events.delete(h); wtx.delete(h); }
+  for (const [w, txs] of wtx) events.set(w, txs.map(t => eventFor(t, w)).filter(Boolean).sort((a, b) => a.slot - b.slot));
+
+  say('checking whether shared funders are exchanges');
+  const fCount = new Map();
+  for (const x of funders.values()) fCount.set(x.f, (fCount.get(x.f) || 0) + 1);
+  const exchangeFunders = new Set(); let looked = 0;
+  for (const [f, n] of fCount){
+    if (n < 2 || isMarket(f) || events.has(f)) continue;
+    if (++looked > 15) break;
+    const r = await rpc('getSignaturesForAddress', [f, {limit:1000}]).catch(e => { if (e instanceof UserError) throw e; return []; });
+    if (r.length >= 1000 && ((r[0].blockTime || 0) - (r[r.length - 1].blockTime || 0)) < 7 * 86400) exchangeFunders.add(f);
+  }
+
+  const A = analyse({events, funders, roles, early, holders, creator, exchangeFunders});
+  const suspect = A.groups.filter(g => g.suspect);
+  const linked = suspect.reduce((s, g) => s + g.now, 0) / SUPPLY * 100;
+  const cg = A.groups.find(g => g.hasCreator);
+  const creatorPct = cg ? cg.now / SUPPLY * 100 : 0;
+  const bundle = A.groups.reduce((s, g) => s + g.why.bundle, 0);
+  const reasons = suspect.slice(0, 2).flatMap(g => g.reasons.slice(0, 1));
+  const wallets = [...new Set([...events.keys(), ...[...funders.values()].map(x => x.f)])].slice(0, 150);
+  const cf = funders.get(creator);
+  return {ok:true, linkedPct:linked, creatorPct, bundle, groups:suspect.length, checked:A.checked, reasons, calls:CALLS - calls0, mode:MODE, creator, creatorFunder:cf ? cf.f : null, wallets};
+}
+
+function analyse({events, funders, roles, early, holders, creator, exchangeFunders}){
+  const wallets = [...events.keys()];
+  const parent = new Map(wallets.map(w => [w, w]));
+  const find = w => { while (parent.get(w) !== w){ parent.set(w, parent.get(parent.get(w))); w = parent.get(w); } return w; };
+  const union = (a, b) => { if (!parent.has(a) || !parent.has(b)) return; const x = find(a), y = find(b); if (x !== y) parent.set(x, y); };
+  const links = [];
+  for (const [w, ev] of events) for (const e of ev){
+    if (e.type === 'out' && e.cp && parent.has(e.cp) && e.amt / SUPPLY >= 0.0005){ union(w, e.cp); links.push({a:w, b:e.cp, kind:'transfer', amt:e.amt}); }
+  }
+  for (const w of wallets) if (w !== creator && roles.get(w) && roles.get(w).has('same-block')){ union(w, creator); links.push({a:w, b:creator, kind:'bundle'}); }
+  const byFunder = new Map();
+  for (const [w, x] of funders){ if (isMarket(x.f) || (exchangeFunders && exchangeFunders.has(x.f))) continue; if (!byFunder.has(x.f)) byFunder.set(x.f, []); byFunder.get(x.f).push(w); }
+  for (const [f, list] of byFunder){
+    if (list.length > DC.EXCHANGE_FANOUT) continue;
+    if (parent.has(f)) list.forEach(w => { union(w, f); links.push({a:f, b:w, kind:'paid'}); });
+    if (list.length >= 2) for (let i = 1; i < list.length; i++){ union(list[0], list[i]); links.push({a:list[0], b:list[i], kind:'funder', f}); }
+  }
+  const wstat = new Map();
+  for (const w of wallets){
+    const ev = events.get(w);
+    const s = {w, buy:0, sell:0, inn:0, out:0};
+    for (const e of ev){
+      if (e.type === 'buy') s.buy += e.amt;
+      if (e.type === 'sell') s.sell += e.amt;
+      if (e.type === 'in') s.inn += e.amt;
+      if (e.type === 'out') s.out += e.amt;
+    }
+    s.got = s.buy + s.inn;
+    s.now = holders.has(w) ? holders.get(w) : Math.max(0, s.got - s.sell - s.out);
+    wstat.set(w, s);
+  }
+  const groupsMap = new Map();
+  for (const w of wallets){ const r = find(w); if (!groupsMap.has(r)) groupsMap.set(r, []); groupsMap.get(r).push(w); }
+  const groups = [...groupsMap.values()].map(members => {
+    const set = new Set(members);
+    const g = {members, hasCreator:set.has(creator), now:0, reasons:[]};
+    const ev = [];
+    for (const w of members){
+      g.now += wstat.get(w).now;
+      for (const e of events.get(w)){
+        const internal = (e.type === 'in' || e.type === 'out') && e.cp && set.has(e.cp);
+        if (!internal) ev.push(e);
+      }
+    }
+    ev.sort((a, b) => a.slot - b.slot);
+    let bal = 0, peak = 0;
+    for (const e of ev){
+      if (e.type === 'buy' || e.type === 'in') bal += e.amt; else if (e.type === 'sell' || e.type === 'out') bal -= e.amt;
+      if (bal > peak) peak = bal;
+    }
+    g.peak = Math.max(peak, g.now);
+    const L = links.filter(l => set.has(l.a) && set.has(l.b));
+    const nBundle = L.filter(l => l.kind === 'bundle').length;
+    const nT = L.filter(l => l.kind === 'transfer').length;
+    const fC = new Map(); L.filter(l => l.kind === 'funder').forEach(l => fC.set(l.f, new Set([...(fC.get(l.f) || []), l.a, l.b])));
+    const nPaid = L.filter(l => l.kind === 'paid').length;
+    g.why = {bundle:nBundle, transfers:nT, paid:nPaid};
+    if (nBundle) g.reasons.push(nBundle + ' wallet' + (nBundle > 1 ? 's' : '') + ' bought in the same block the coin was created');
+    for (const [f, s] of fC) if (!set.has(f)) g.reasons.push(s.size + ' wallets got their first SOL from the same wallet (' + short(f) + ')');
+    if (nPaid) g.reasons.push(nPaid + ' wallet' + (nPaid > 1 ? 's were' : ' was') + ' paid for by another wallet in the group');
+    if (nT) g.reasons.push('coins were passed between these wallets ' + nT + ' time' + (nT > 1 ? 's' : '') + ' without a sale');
+    return g;
+  });
+  groups.forEach(g => { g.suspect = (g.members.length >= 2 || g.hasCreator) && g.peak / SUPPLY >= 0.005; });
+  groups.sort((a, b) => (b.suspect - a.suspect) || (b.now - a.now));
+  return {groups, checked:wallets.length};
+}
+
+/* =====================================================================
+   Paper trading
+   ===================================================================== */
+function sellValue(tokens, px, liq){
+  const g = tokens * px; if (!(g > 0)) return 0;
+  const half = Math.max(liq || 0, 1) / 2;
+  const out = g / (1 + g / half);
+  return Math.max(0, out - out * CFG.swapFee / 100 - CFG.netFee);
+}
+function sellCost(tokens, px, liq){ const g = tokens * px; return g > 0 ? g - sellValue(tokens, px, liq) : 0; }
+function equity(){ return S.cash + S.positions.reduce((s, p) => s + sellValue(p.tokens, p.price, p.liq), 0); }
+function equityPoint(){ S.equity.push([now(), +equity().toFixed(2)]); }
+
+const DEX_NAMES = {pumpfun:'pump.fun curve', pumpswap:'PumpSwap', raydium:'Raydium', meteora:'Meteora', meteoradbc:'Meteora', orca:'Orca', launchlab:'Raydium LaunchLab'};
+const dexName = d => DEX_NAMES[d] || (d ? d.charAt(0).toUpperCase() + d.slice(1) : 'unknown');
+/* ask Jupiter what a real trade would get right now (nothing is spent) */
+async function jupQuote(inMint, outMint, amountRaw){
+  if (!(amountRaw >= 1)) return null;
+  const u = 'https://lite-api.jup.ag/swap/v1/quote?inputMint=' + inMint + '&outputMint=' + outMint + '&amount=' + Math.floor(amountRaw) + '&slippageBps=1000&restrictIntermediateTokens=true';
+  let j; try{ j = await getJSON('jup', u); }catch(e){ return null; }
+  if (!j || !(+j.outAmount > 0)) return null;
+  const route = [...new Set((j.routePlan || []).map(r => r.swapInfo && r.swapInfo.label).filter(Boolean))];
+  return {out:+j.outAmount, impact:+j.priceImpactPct || 0, route:route.join(' → ') || 'Jupiter'};
+}
+/* what selling `tokens` would really return: Jupiter quote if possible, else the estimate */
+async function sellNow(p, tokens){
+  if (p.dec != null && S.solUsd > 0){
+    const q = await jupQuote(p.mint, WSOL, tokens * Math.pow(10, p.dec));
+    if (q) return {got:Math.max(0, q.out / 1e9 * S.solUsd - CFG.netFee), quoted:true, route:q.route};
+  }
+  return {got:sellValue(tokens, p.price, p.liq), quoted:false, route:dexName(p.dex)};
+}
+
+async function buy(c, m, h, deep, dec, creator){
+  const size = +CFG.tradeSize;
+  let tokens, avg, quoted = false, route = dexName(m.dex), impact = null;
+  if (dec != null && S.solUsd > 0){
+    const inv = size - CFG.netFee;
+    const q = await jupQuote(WSOL, c.mint, inv / S.solUsd * 1e9);
+    if (q){ tokens = q.out / Math.pow(10, dec); avg = inv / tokens; quoted = true; route = q.route; impact = q.impact; }
+  }
+  if (!quoted){
+    const fee = size * CFG.swapFee / 100 + CFG.netFee, inv = size - fee;
+    avg = m.price * (1 + inv / (m.liq / 2)); tokens = inv / avg;
+  }
+  if (!(tokens > 0)) return verdict(c, later("Couldn't price the buy", '', 3));
+  if (S.positions.length >= CFG.maxOpen || S.cash < size) return verdict(c, later('All trade slots were full', '', 5));
+  S.cash -= size;
+  const buyCost = Math.max(0, size - tokens * m.price);
+  const bits = ['liquidity ' + usd(m.liq), 'market cap ' + usd(m.mcap), 'top 10 own ' + pctN(h.top10), m.buys1h + ' buys vs ' + m.sells1h + ' sells last hour'];
+  if (m.curve) bits.push('still on the pump.fun curve');
+  bits.push(deep ? 'deep check clean (' + deep.checked + ' wallets, linked groups hold ' + pctN(deep.linkedPct) + ')' : 'no deep check');
+  bits.push(quoted ? 'real Jupiter quote via ' + route : 'estimated fill (no Jupiter quote)');
+  const p = {id:c.mint + ':' + now(), mint:c.mint, sym:m.sym || c.sym || short(c.mint), name:m.name, url:m.url, at:now(),
+    cost:size, tokens, tokens0:tokens, entry:avg, spot0:m.price, liq0:m.liq, mcap0:m.mcap, price:m.price, liq:m.liq, mcap:m.mcap, peak:m.price,
+    realized:0, costs:buyCost, tpHit:false, misses:0, holders0:h.owners, curve:!!m.curve, why:bits.join(' · '), hwAt:now(),
+    dec, dex:m.dex, route, quoted, impact, creator};
+  S.positions.push(p); S.stats.bought++;
+  c.status = 'bought'; c.reason = 'Bought';
+  feed('buy', p.sym, 'Bought ' + usd(size) + ' at ' + price(avg) + (quoted ? ' (real quote, via ' + route + ')' : ' (estimated)') + '. ' + bits.slice(0, 4).join(' · '), tagOf(p.mint));
+  equityPoint(); save(); render();
+}
+async function partial(p, frac, why){
+  if (p.busy) return; p.busy = true;
+  try{
+    const sold = p.tokens * frac;
+    const r = await sellNow(p, sold);
+    if (!S.positions.includes(p)) return;
+    p.costs = (p.costs || 0) + Math.max(0, sold * p.price - r.got);
+    p.tokens -= sold; p.realized += r.got; S.cash += r.got; p.tpHit = true;
+    p.note = why + ' (' + usd(r.got) + ')';
+    feed('win', p.sym, 'Sold half: ' + why + '. Got back ' + usd(r.got) + (r.quoted ? ' (real quote)' : '') + '; stop on the rest moved to the buy price.', tagOf(p.mint));
+  } finally { p.busy = false; }
+}
+async function closePos(p, why, zero){
+  if (p.closing) return; p.closing = true;
+  let r = {got:0, quoted:false, route:''};
+  if (!zero) r = await sellNow(p, p.tokens);
+  if (!zero) p.costs = (p.costs || 0) + Math.max(0, p.tokens * p.price - r.got);
+  S.cash += r.got;
+  const out = p.realized + r.got, pnl = out - p.cost;
+  const t = {mint:p.mint, sym:p.sym, url:p.url, at:p.at, sold:now(), cost:p.cost, out, pnl, pnlPct:pnl / p.cost,
+    entry:p.entry, exit:p.price, peakPct:p.peak / p.entry - 1, why:p.why, exitWhy:why, half:p.tpHit ? p.note : '', costs:p.costs || 0,
+    route:p.route || dexName(p.dex), dex:p.dex, quotedBuy:!!p.quoted, quotedSell:r.quoted, tokens0:p.tokens0 || p.tokens, liq0:p.liq0};
+  if (/^quick-flip/.test(why) && CFG.tpUsd > 0) t.wf = whatIfStart(t);
+  t.creator = p.creator || null;
+  if (p.creator && /liquidity pulled|marked it as rugged|disappeared/.test(why)) blRug(p.creator, {mint:p.mint, sym:p.sym}, p.sym + ' rugged while we held it (' + why.split(' (')[0] + ')');
+  S.trades.unshift(t);
+  S.positions = S.positions.filter(x => x !== p);
+  feed(pnl >= 0 ? 'win' : 'loss', p.sym, 'Sold: ' + why + '. Result ' + money(pnl) + ' (' + pctS(pnl / p.cost) + ')' + (r.quoted ? ', real quote' : zero ? '' : ', estimated') + '.', tagOf(p.mint));
+  equityPoint(); save(); render();
+}
+
+/* ---------- "what if the target had been bigger?" ---------- */
+function netAt(t, r){ return sellValue(t.tokens0, t.entry * r, (t.liq0 || 1) * Math.sqrt(r)) - t.cost; }
+function ratioFor(t, X){
+  let lo = 1, hi = 1;
+  while (netAt(t, hi) < X && hi < 200) hi *= 1.5;
+  if (netAt(t, hi) < X) return Infinity;
+  for (let i = 0; i < 40; i++){ const mid = (lo + hi) / 2; if (netAt(t, mid) >= X) hi = mid; else lo = mid; }
+  return hi;
+}
+function whatIfStart(t){
+  const T = +CFG.tpUsd;
+  return {T, rs:1 - CFG.stopLoss / 100, until:Math.max(t.at + CFG.maxHoldMin * 60000, t.sold + 60000), hi:t.exit / t.entry, misses:0,
+    alts:[T * 2, T * 4].map(X => ({X, rT:ratioFor(t, X), st:'open', pnl:null}))};
+}
+let trackingSold = false;
+async function trackSold(){
+  if (trackingSold) return;
+  const list = S.trades.filter(t => t.wf && t.wf.alts.some(a => a.st === 'open'));
+  if (!list.length) return;
+  trackingSold = true;
+  try{
+    let mm; try{ mm = await dsPairs(list.map(t => t.mint)); }catch(e){ return; }
+    for (const t of list){
+      const w = t.wf, m = mm.get(t.mint);
+      if (!m || !m.price){
+        if (++w.misses >= 5) w.alts.forEach(a => { if (a.st === 'open'){ a.st = 'stop'; a.pnl = -t.cost; } });
+        continue;
+      }
+      w.misses = 0;
+      const r = m.price / t.entry; w.hi = Math.max(w.hi, r); w.last = r;
+      for (const a of w.alts){
+        if (a.st !== 'open') continue;
+        if (r >= a.rT){ a.st = 'hit'; a.pnl = a.X; }
+        else if (r <= w.rs){ a.st = 'stop'; a.pnl = netAt(t, w.rs); }
+        else if (now() >= w.until){ a.st = 'timeout'; a.pnl = netAt(t, r); }
+      }
+    }
+    save(); renderWhatIf();
+  } finally { trackingSold = false; }
+}
+function renderWhatIf(){
+  const el = $('#whatif'); if (!el) return;
+  const tr = S.trades.filter(t => t.wf);
+  if (!tr.length){ el.parentElement.style.display = 'none'; return; }
+  el.parentElement.style.display = '';
+  const T = tr[0].wf.T;
+  const allActual = S.trades.reduce((s, t) => s + t.pnl, 0);
+  const rows = [0, 1].map(i => {
+    const X = tr[0].wf.alts[i].X;
+    const same = tr.filter(t => t.wf.alts[i] && t.wf.alts[i].X === X);
+    const done = same.filter(t => t.wf.alts[i].st !== 'open');
+    const hit = done.filter(t => t.wf.alts[i].st === 'hit').length;
+    const stop = done.filter(t => t.wf.alts[i].st === 'stop').length;
+    const to = done.filter(t => t.wf.alts[i].st === 'timeout').length;
+    const actual = done.reduce((s, t) => s + t.pnl, 0);
+    const alt = done.reduce((s, t) => s + t.wf.alts[i].pnl, 0);
+    const pend = same.length - done.length;
+    const total = allActual - actual + alt;
+    return '<tr><td><b>' + usd(X) + ' target</b></td><td class="num">' + hit + ' of ' + done.length + '</td><td class="num">' + stop + '</td><td class="num">' + to + '</td>' +
+      '<td class="r num ' + cls(alt - actual) + '">' + money(alt) + '<br><small>vs ' + money(actual) + ' at ' + usd(T) + '</small></td>' +
+      '<td class="r num ' + cls(total) + '">' + money(total) + '<br><small>vs ' + money(allActual) + ' now</small></td>' +
+      '<td class="muted">' + (pend ? pend + ' still being watched' : '') + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<table><thead><tr><th>If the target was</th><th>Wins that reached it</th><th>Hit the stop first</th><th>Ran out of time</th><th class="r">Those trades</th><th class="r">Overall result</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="muted" style="font-size:.82rem;padding:10px 16px 14px">After each ' + usd(T) + ' quick-flip win, it keeps watching that coin (same stop and time limit) to see what a bigger target would have done. Losing trades would have lost the same either way. Prices are checked once a minute, so treat these as close estimates.</div>';
+}
+
+/* watch open trades */
+let monitoring = false;
+async function monitor(){
+  if (monitoring || !S.positions.length) return; monitoring = true;
+  try{
+    let mm;
+    try{ mm = await dsPairs(S.positions.map(p => p.mint)); }catch(e){ return; }
+    for (const p of [...S.positions]){
+      if (p.closing || p.busy) continue;
+      const m = mm.get(p.mint);
+      if (!m || !m.price){
+        p.misses = (p.misses || 0) + 1;
+        if (p.misses >= 20) await closePos(p, 'price data disappeared (probably rugged), counted as a total loss', true);
+        continue;
+      }
+      p.misses = 0;
+      if (p.curve && !m.curve){ p.curve = false; p.liq0 = m.liq; p.spot0 = m.price; }   // graduated from pump.fun while we held it
+      p.price = m.price; if (m.liq != null) p.liq = m.liq; p.mcap = m.mcap; p.peak = Math.max(p.peak, m.price); p.checkedAt = now();
+      const ch = m.price / p.entry - 1, pk = p.peak / p.entry - 1, held = (now() - p.at) / 60000;
+      const stop = p.tpHit ? 0 : -CFG.stopLoss / 100;
+      if (!p.curve && p.liq0 && p.spot0){
+        const expected = p.liq0 * Math.sqrt(m.price / p.spot0);  // what the pool "should" be at this price
+        if (p.liq < expected * (1 - CFG.liqPull / 100)){ await closePos(p, 'liquidity pulled (pool is ' + pctN(100 * (1 - p.liq / expected)) + ' smaller than the price explains)'); continue; }
+      }
+      if (CFG.tpUsd > 0){
+        const prof = sellValue(p.tokens, p.price, p.liq) + p.realized - p.cost;
+        if (prof >= CFG.tpUsd){ await closePos(p, 'quick-flip target hit at ' + pctS(ch)); continue; }
+      }
+      if (ch <= stop){ await closePos(p, p.tpHit ? 'fell back to the buy price after taking profit' : 'stop loss hit at ' + pctS(ch)); continue; }
+      if (!p.tpHit && ch >= CFG.takeProfit / 100){
+        if (CFG.halfAtTP){ await partial(p, 0.5, 'take profit hit at ' + pctS(ch)); }
+        else { await closePos(p, 'take profit hit at ' + pctS(ch)); continue; }
+      }
+      if (pk >= CFG.trailStart / 100 && m.price <= p.peak * (1 - CFG.trail / 100)){ await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - m.price / p.peak)) + ' from its high of ' + pctS(pk)); continue; }
+      if (held >= CFG.maxHoldMin){ await closePos(p, 'time limit reached (' + ago(now() - p.at) + ')'); continue; }
+    }
+    save(); render();
+  } finally { monitoring = false; }
+}
+
+/* every few minutes: are the big wallets dumping? */
+let watching = false;
+async function holderWatch(){
+  if (watching || !CFG.dumpExit || !S.positions.length) return; watching = true;
+  try{
+    for (const p of [...S.positions]){
+      if (!S.positions.includes(p) || now() - (p.hwAt || p.at) < 175000) continue;
+      p.hwAt = now();
+      let r; try{ r = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + p.mint + '/report'); }catch(e){ continue; }
+      if (!r || !S.positions.includes(p)) continue;
+      if (r.rugged){ await closePos(p, 'RugCheck marked it as rugged'); continue; }
+      const h = holderInfo(r);
+      let n = 0, held = 0;
+      for (const [o, pct0] of Object.entries(p.holders0 || {})){
+        if (pct0 < 1) continue;
+        const cur = h.owners[o] != null ? h.owners[o] : h.minListed;   // not in the list any more = holds less than the smallest listed
+        if (cur < pct0 * 0.5){ n++; held += pct0; }
+      }
+      if (n && held >= 3) await closePos(p, n + ' big wallet' + (n > 1 ? 's' : '') + ' sold more than half their coins (they held ' + pctN(held) + ' together)');
+    }
+  } finally { watching = false; }
+}
+
+/* ---------------- the checking worker ---------------- */
+const MAX_TRIES = 18;
+function countReject(key){ S.rejects[key] = (S.rejects[key] || 0) + 1; }
+function verdict(c, r){
+  c.reason = r.key; c.detail = r.detail;
+  if (r.hard){
+    c.status = 'rejected'; countReject(r.key);
+    if (r.key !== 'Too old' || SHOW_ALL) feed('reject', c.sym || short(c.mint), 'Skipped: ' + r.key + (r.detail ? ' (' + r.detail + ')' : ''), tagOf(c.mint));
+    return;
+  }
+  if (c.tries >= MAX_TRIES || now() - c.first > CFG.maxAgeHr * 3600e3){
+    c.status = 'expired'; countReject(r.key);
+    if (SHOW_ALL) feed('wait', c.sym || short(c.mint), 'Stopped watching after ' + c.tries + ' checks: ' + r.key, tagOf(c.mint));
+    return;
+  }
+  c.status = 'waiting'; c.next = now() + (r.mins || 5) * 60000;
+  if (SHOW_ALL && !c.lastLogged){ c.lastLogged = r.key; feed('wait', c.sym || short(c.mint), 'Watching: ' + r.key + (r.detail ? ' (' + r.detail + ')' : '') + '. Rechecks every 5 min, quietly.', tagOf(c.mint)); }
+}
+const later = (key, detail, mins) => ({ok:false, hard:false, key, detail:detail || '', mins});
+
+async function processOne(c, m){
+  c.tries++;
+  if (!m) return verdict(c, later('Not on DexScreener yet', '', 3));
+  if (m.price > 0){
+    const snap = {t:now(), price:m.price, liq:m.liq, mcap:m.mcap, vol1h:m.vol1h, buys1h:m.buys1h, sells1h:m.sells1h, ch5m:m.ch5m, ch1h:m.ch1h, ageMin:m.created ? Math.round((now() - m.created) / 60000) : null, dex:m.dex, curve:!!m.curve};
+    if (!c.p0){ c.p0 = m.price; c.t0 = now(); c.snap0 = snap; }
+    c.snap = snap;
+  }
+  c.sym = m.sym || c.sym;
+  let r = quick(m);
+  if (!r.ok) return verdict(c, r);
+  if (!c.passedQuick){ c.passedQuick = true; S.stats.quick++; }
+
+  setBusy('Safety check on ' + c.sym);
+  let rep;
+  try{ rep = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + c.mint + '/report'); }
+  catch(e){ setBusy(''); return verdict(c, later('RugCheck not reachable', '', 3)); }
+  setBusy('');
+  if (rep && rep.creator) c.creator = rep.creator;
+  r = rugEval(rep, m);
+  if (!r.ok){
+    if (r.key === 'RugCheck says it already rugged' && c.creator) blRug(c.creator, c, 'RugCheck marked ' + (c.sym || 'their coin') + ' as rugged');
+    return verdict(c, r);
+  }
+  const h = r.h;
+  const bl = blHit([c.creator]);
+  if (bl) return verdict(c, hard('Deployer is blacklisted', bl.why));
+
+  let deep = null;
+  if (CFG.useDeep && CFG.heliusKey && !DEEP_OFF){
+    if (c.deep && now() - c.deep.at < 30 * 60000) deep = c.deep.res;
+    else {
+      S.deepTimes = (S.deepTimes || []).filter(t => now() - t < 3600e3);
+      if (S.deepTimes.length >= CFG.deepPerHour) return verdict(c, later('Waiting for a deep-check slot', 'hourly limit reached', 5));
+      S.deepTimes.push(now());
+      feed('info', c.sym, 'Passed quick and safety checks. Running the deep check…', tagOf(c.mint));
+      try{ deep = await deepCheck(c.mint, rep, c.sym); }
+      catch(e){
+        if (e instanceof UserError){ DEEP_OFF = e.message; health('hel', 'err', e.message); feed('error', '', 'Deep check turned off: ' + e.message); renderBanners(); deep = null; }
+        else deep = {ok:false, why:e.message};
+      }
+      setBusy('');
+      if (deep){ c.deep = {at:now(), res:deep}; S.stats.deep++; }
+    }
+    if (deep){
+      if (!deep.ok) return verdict(c, hard("Deep check couldn't finish", deep.why));
+      const b1 = blHit([deep.creator]);
+      if (b1) return verdict(c, hard('Deployer is blacklisted', b1.why));
+      const b2 = blHit([deep.creatorFunder]);
+      if (b2) return verdict(c, hard('Deployer was funded by a blacklisted wallet', short(deep.creatorFunder) + ': ' + b2.why));
+      const bw = (deep.wallets || []).find(w => S.blacklist[w]);
+      if (bw){ S.blacklist[bw].blocked = (S.blacklist[bw].blocked || 0) + 1; return verdict(c, hard('A blacklisted wallet is involved', short(bw) + ' is linked to this coin: ' + S.blacklist[bw].why)); }
+      if (deep.bundle >= CFG.maxBundled) return verdict(c, hard('Bundled launch', deep.bundle + ' wallets bought in the launch block'));
+      if (deep.creatorPct > CFG.maxCreatorGroup) return verdict(c, hard("Creator's group holds a lot", pctN(deep.creatorPct)));
+      if (deep.linkedPct > CFG.maxLinked) return verdict(c, hard('Linked wallets hold a lot', deep.groups + ' group' + (deep.groups > 1 ? 's' : '') + ' hold ' + pctN(deep.linkedPct) + (deep.reasons[0] ? '; ' + deep.reasons[0] : '')));
+    }
+  }
+
+  if (S.positions.some(p => p.mint === c.mint)){ c.status = 'bought'; return; }
+  if (S.positions.length >= CFG.maxOpen) return verdict(c, later('All trade slots were full', '', 5));
+  if (S.cash < CFG.tradeSize) return verdict(c, later('Not enough fake cash left', '', 5));
+
+  let fm = m;
+  try{ fm = (await dsPairs([c.mint])).get(c.mint) || m; }catch(e){}
+  r = quick(fm);
+  if (!r.ok) return verdict(c, r);
+  await buy(c, fm, h, deep, rep && rep.token && rep.token.decimals != null ? +rep.token.decimals : null, c.creator || (deep && deep.creator) || null);
+}
+
+let SHOW_ALL = false;
+async function worker(){
+  for (;;){
+    try{
+      if (!S.running){ await sleep(1000); continue; }
+      if (S.funderQueue.length) await funderStep();
+      const due = Object.values(S.seen).filter(c => (c.status === 'new' || c.status === 'waiting') && c.next <= now())
+        .sort((a, b) => a.next - b.next).slice(0, 30);
+      if (!due.length){ await sleep(3000); continue; }
+      let mm;
+      try{ mm = await dsPairs(due.map(c => c.mint)); }
+      catch(e){ due.forEach(c => c.next = now() + 60000); await sleep(5000); continue; }
+      for (const c of due){
+        if (!S.running) break;
+        await processOne(c, mm.get(c.mint));
+      }
+      save(); render();
+    }catch(e){
+      feed('error', '', 'Something went wrong while checking coins: ' + e.message + '. Carrying on.');
+      await sleep(5000);
+    }
+  }
+}
+
+/* ---------------- start / pause ---------------- */
+let wakeLock = null;
+async function setWake(on){
+  try{
+    if (on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock){ await wakeLock.release(); wakeLock = null; }
+  }catch(e){}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('#wake').checked && S.running && !wakeLock) setWake(true); });
+
+function start(){
+  S.running = true; save(); render();
+  feed('info', '', 'Started scouting.' + (CFG.useDeep && !CFG.heliusKey ? ' No Helius key, so the deep check is skipped.' : ''));
+  if ($('#wake').checked) setWake(true);
+  scanSources();
+}
+function pause(){ S.running = false; save(); render(); feed('info', '', 'Paused. Open trades are still being watched while this page is open.'); setWake(false); }
+
+/* ---------------- rendering ---------------- */
+let BUSY = '';
+function setBusy(t){ BUSY = t; const b = $('#busy'); if (b) b.textContent = t; }
+function renderHealth(){
+  const name = {gt:'New coins', ds:'Prices', rc:'RugCheck', jup:'Jupiter', hel:'Helius'};
+  const st = h => h === 'hel' && !CFG.heliusKey ? 'off' : HEALTH[h] || '';
+  $('#health').innerHTML = Object.keys(name).map(h => '<span title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
+}
+function renderStatus(){
+  const waiting = S._waiting != null ? S._waiting : Object.values(S.seen).filter(c => c.status === 'waiting' || c.status === 'new').length;
+  $('#runState').innerHTML = S.running
+    ? '<span class="dot live"></span>Running · last scan ' + (S.lastScan ? ago(now() - S.lastScan) + ' ago' : 'starting') + ' · watching ' + waiting + ' coin' + (waiting === 1 ? '' : 's')
+    : '<span class="dot"></span>Paused';
+  const b = $('#goBtn');
+  b.textContent = S.running ? 'Pause' : 'Start scouting';
+  b.classList.toggle('running', S.running);
+}
+function renderBanners(){
+  const out = [];
+  if (DEEP_OFF) out.push('<div class="banner bad"><b>Deep check is off.</b> ' + esc(DEEP_OFF) + ' Coins are still checked with RugCheck. Fix the key, then reload the page.<button class="btn small" id="keyBtn">Fix Helius key</button></div>');
+  else if (CFG.useDeep && !CFG.heliusKey) out.push('<div class="banner"><b>Deep check skipped:</b> add your Helius API key to run the Token Detective check before each buy. Everything else works without it.<button class="btn small" id="keyBtn">Add Helius key</button></div>');
+  $('#banners').innerHTML = out.join('');
+  const kb = $('#keyBtn'); if (kb) kb.onclick = openKey;
+}
+function renderStats(){
+  const eq = equity(), pnl = eq - S.start;
+  const wins = S.trades.filter(t => t.pnl > 0).length, n = S.trades.length;
+  const tiles = [
+    ['Fake balance', dollars(eq), dollars(S.cash) + ' cash, ' + dollars(eq - S.cash) + ' in trades'],
+    ['Profit / loss', '<span class="' + cls(pnl) + '">' + money(pnl) + '</span>', pctS(pnl / S.start) + ' since start'],
+    ['Win rate', n ? Math.round(100 * wins / n) + '%' : '—', n ? wins + (wins === 1 ? ' win, ' : ' wins, ') + (n - wins) + (n - wins === 1 ? ' loss' : ' losses') : 'no finished trades yet'],
+    ['Open trades', S.positions.length + ' / ' + CFG.maxOpen, usd(CFG.tradeSize) + ' per trade'],
+    ['Coins checked', S.stats.seen.toLocaleString(), S.stats.quick + ' passed quick checks · ' + S.stats.bought + ' bought'],
+  ];
+  $('#stats').innerHTML = tiles.map(([k, v, s]) => '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>').join('');
+}
+function planText(p){
+  const ch = p.price / p.entry - 1, pk = p.peak / p.entry - 1;
+  if (CFG.tpUsd > 0) return 'Sells at ' + money(+CFG.tpUsd) + ' profit · stop ' + pctS(-CFG.stopLoss / 100) + (pk >= CFG.trailStart / 100 ? ' · trailing on' : '');
+  if (p.tpHit) return 'Half sold. Rest: stop at buy price' + (pk >= CFG.trailStart / 100 ? ', trailing ' + CFG.trail + '% from high' : '');
+  if (pk >= CFG.trailStart / 100) return 'Trailing stop on: sells below ' + price(p.peak * (1 - CFG.trail / 100));
+  return 'Stop ' + pctS(-CFG.stopLoss / 100) + ' · take profit ' + pctS(CFG.takeProfit / 100);
+}
+function renderOpen(){
+  $('#openNote').textContent = S.positions.length ? 'prices refresh every ' + Math.max(3, +CFG.priceEvery || 5) + ' seconds' : '';
+  if (!S.positions.length){ $('#open').innerHTML = '<div class="empty">' + (S.running ? 'No open trades. It only buys when a coin passes every check, so this can take a while.' : 'No open trades. Press Start scouting to begin.') + '</div>'; return; }
+  $('#open').innerHTML = '<table><thead><tr><th>Coin</th><th>Bought</th><th class="r">Paid</th><th class="r">Worth now</th><th class="r">Change</th><th class="r">High</th><th>Plan</th><th></th></tr></thead><tbody>' +
+    S.positions.map(p => {
+      const val = sellValue(p.tokens, p.price, p.liq) + p.realized, d = val - p.cost;
+      return '<tr><td class="coin"><b>' + (p.url ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(p.sym) + '</a>' : esc(p.sym)) + '</b><small>' + usd(p.mcap) + ' mcap · ' + usd(p.liq) + ' liq</small><small>' + esc(p.route || dexName(p.dex)) + (p.quoted ? '' : ' (est.)') + '</small></td>' +
+        '<td class="num">' + ago(now() - p.at) + ' ago</td>' +
+        '<td class="r num">' + usd(p.cost) + '</td>' +
+        '<td class="r num">' + usd(val) + '</td>' +
+        '<td class="r num ' + cls(d) + '">' + money(d) + '<br><small>' + pctS(d / p.cost) + '</small></td>' +
+        '<td class="r num">' + pctS(p.peak / p.entry - 1) + '</td>' +
+        '<td class="why">' + esc(planText(p)) + '</td>' +
+        '<td><button class="btn small" data-sell="' + esc(p.id) + '">Sell now</button></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function renderJournal(){
+  if (!S.trades.length){ $('#journal').innerHTML = '<div class="empty">Finished trades show up here, with why it bought and why it sold.</div>'; return; }
+  $('#journal').innerHTML = '<table><thead><tr><th>Coin</th><th>When</th><th class="r">Held</th><th class="r">Result</th><th class="r">High</th><th>Why it sold</th><th>Why it bought</th></tr></thead><tbody>' +
+    S.trades.slice(0, 200).map(t => '<tr><td class="coin"><b>' + (t.url ? '<a href="' + esc(t.url) + '" target="_blank" rel="noopener">' + esc(t.sym) + '</a>' : esc(t.sym)) + '</b><small>' + usd(t.cost) + ' in, ' + usd(t.out) + ' out</small><small>' + esc(t.route || '') + (t.route && !(t.quotedBuy && t.quotedSell) ? ' (est.)' : '') + '</small></td>' +
+      '<td class="num nw">' + new Date(t.at).toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + clock(t.at) + '</td>' +
+      '<td class="r num">' + ago(t.sold - t.at) + '</td>' +
+      '<td class="r num ' + cls(t.pnl) + '">' + money(t.pnl) + '<br><small>' + pctS(t.pnlPct) + '</small></td>' +
+      '<td class="r num">' + pctS(t.peakPct) + '</td>' +
+      '<td class="why" style="color:var(--ink)">' + esc(t.exitWhy.charAt(0).toUpperCase() + t.exitWhy.slice(1)) + (t.half ? '<br><span class="muted">Earlier: ' + esc(t.half) + '</span>' : '') + '</td>' +
+      '<td class="why">' + esc(t.why) + '</td></tr>').join('') + '</tbody></table>';
+}
+function renderFeed(){
+  const el = $('#feed'); if (!el) return;
+  const rows = S.log.filter(l => SHOW_ALL || l.kind !== 'wait').slice(0, 150);
+  el.innerHTML = rows.length ? rows.map(l => '<div class="' + l.kind + '"><span class="t">' + clock(l.t) + '</span><span class="sym" title="' + esc(l.sym) + '">' + esc(l.sym) + (l.tag ? '<small>' + esc(l.tag) + '</small>' : '') + '</span><span class="x">' + esc(l.text) + '</span></div>').join('')
+    : '<div style="display:block" class="muted">Nothing yet. Press Start scouting.</div>';
+}
+/* =====================================================================
+   Deployer blacklist
+   ===================================================================== */
+function blHit(addrs){
+  for (const a of addrs) if (a && S.blacklist[a]){ S.blacklist[a].blocked = (S.blacklist[a].blocked || 0) + 1; return S.blacklist[a]; }
+  return null;
+}
+function blAdd(addr, info){
+  if (!addr || S.blacklist[addr]) return false;
+  S.blacklist[addr] = Object.assign({at:now(), blocked:0}, info);
+  feed('info', info.sym || '', 'Blacklisted ' + (info.kind === 'funder' ? 'funder ' : info.kind === 'manual' ? 'wallet ' : 'deployer ') + short(addr) + ': ' + info.why, tagOf(info.mint));
+  if (info.kind === 'deployer' && CFG.blFunders && CFG.heliusKey && !DEEP_OFF) S.funderQueue.push({addr, sym:info.sym || '', mint:info.mint || ''});
+  save(); renderBlacklist();
+  return true;
+}
+function blRug(creator, c, why){
+  if (!CFG.blAuto || !creator) return;
+  blAdd(creator, {kind:'deployer', why, sym:c.sym || '', mint:c.mint || ''});
+}
+function crashed(c){
+  c.struck = true;
+  if (!CFG.blAuto) return;
+  if (c.creator) strike(c.creator, c);
+  else if (S.rcQueue.length < 200) S.rcQueue.push(c.mint);
+}
+function strike(creator, c){
+  const s = S.strikes[creator] = S.strikes[creator] || {n:0, coins:[]};
+  if (s.coins.includes(c.mint)) return;
+  s.n++; s.coins.push(c.mint); s.syms = (s.syms || []).concat(c.sym || short(c.mint)).slice(-5);
+  if (s.n >= Math.max(1, +CFG.blStrikes || 2)) blAdd(creator, {kind:'deployer', why:s.n + ' of their coins crashed 90%+ (' + s.syms.join(', ') + ')', sym:c.sym || '', mint:c.mint});
+}
+/* crashed coins we never safety-checked: ask RugCheck who made them (a few per round) */
+async function rcStep(){
+  for (let i = 0; i < 15 && S.rcQueue.length; i++){
+    const mint = S.rcQueue.shift(), c = S.seen[mint];
+    if (!c) continue;
+    let r; try{ r = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + mint + '/report'); }catch(e){ S.rcQueue.unshift(mint); break; }
+    if (!r || !r.creator) continue;
+    c.creator = r.creator;
+    if (r.rugged) blRug(r.creator, c, 'RugCheck marked ' + (c.sym || 'their coin') + ' as rugged');
+    else strike(r.creator, c);
+  }
+}
+/* who paid for a blacklisted deployer's wallet? (skips exchanges and programs) */
+async function funderStep(){
+  const item = S.funderQueue.shift();
+  if (!item || !CFG.heliusKey || DEEP_OFF) return;
+  try{
+    setBusy('Blacklist: finding who funded ' + short(item.addr));
+    MINT = ''; TXS.clear();
+    const txs = (await walletFirstTxs(item.addr)).map(norm).filter(Boolean);
+    let f = null;
+    for (const t of txs){
+      const got = t.sol[item.addr] || 0; if (got <= 0) continue;
+      let best = null, bestV = 0;
+      for (const [k, v] of Object.entries(t.sol)) if (k !== item.addr && v < bestV){ best = k; bestV = v; }
+      if (best && -bestV >= got * 0.5){ f = best; break; }
+    }
+    if (!f || S.blacklist[f]) return;
+    await resolveMarkets([f]);
+    if (isMarket(f)) return;
+    const sg = await rpc('getSignaturesForAddress', [f, {limit:1000}]).catch(() => []);
+    if (sg.length >= 1000 && ((sg[0].blockTime || 0) - (sg[sg.length - 1].blockTime || 0)) < 7 * 86400) return;   // busy wallet = exchange or service
+    blAdd(f, {kind:'funder', why:'paid for blacklisted deployer ' + short(item.addr) + (item.sym ? ' (' + item.sym + ')' : ''), sym:item.sym, mint:item.mint});
+  }catch(e){
+    if (e instanceof UserError){ DEEP_OFF = e.message; renderBanners(); }
+  } finally { setBusy(''); save(); }
+}
+function renderBlacklist(){
+  const el = $('#blist'); if (!el) return;
+  const list = Object.entries(S.blacklist).sort((a, b) => b[1].at - a[1].at);
+  const blocked = list.reduce((s, [, v]) => s + (v.blocked || 0), 0);
+  const watch = Object.entries(S.strikes).filter(([a, v]) => !S.blacklist[a] && v.n > 0).length;
+  $('#blNote').textContent = list.length + ' wallet' + (list.length === 1 ? '' : 's') + ' · ' + blocked + ' coin' + (blocked === 1 ? '' : 's') + ' blocked' + (watch ? ' · ' + watch + ' deployer' + (watch === 1 ? '' : 's') + ' with a strike' : '');
+  if (!list.length){ el.innerHTML = '<div class="empty">Empty so far. Deployers land here when their coin rugs, or after ' + (CFG.blStrikes || 2) + ' of their coins crash 90%+. You can also add a wallet yourself above.</div>'; return; }
+  const kind = k => k === 'funder' ? 'Funder' : k === 'manual' ? 'Added by you' : 'Deployer';
+  el.innerHTML = '<table><thead><tr><th>Wallet</th><th>Type</th><th>Why</th><th>Added</th><th class="r">Coins blocked</th><th></th></tr></thead><tbody>' +
+    list.slice(0, 150).map(([a, v]) => '<tr><td class="num"><a href="https://solscan.io/account/' + esc(a) + '" target="_blank" rel="noopener">' + esc(short(a)) + '</a></td><td>' + kind(v.kind) + '</td><td class="why" style="color:var(--ink)">' + esc(v.why) + '</td><td class="num nw">' + ago(now() - v.at) + ' ago</td><td class="r num">' + (v.blocked || 0) + '</td><td><button class="btn small" data-unbl="' + esc(a) + '">Remove</button></td></tr>').join('') +
+    '</tbody></table>';
+}
+
+/* follow skipped coins for 2 hours: did the rules save us money or cost us winners? */
+let tracking = false;
+async function trackSkipped(){
+  if (tracking) return; tracking = true;
+  try{
+    const list = Object.values(S.seen).filter(c => c.p0 && c.status !== 'bought' && now() - c.t0 < 2 * 3600e3)
+      .sort((a, b) => b.t0 - a.t0).slice(0, 150);
+    if (!list.length) return;
+    let mm; try{ mm = await dsPairs(list.map(c => c.mint)); }catch(e){ return; }
+    for (const c of list){
+      const m = mm.get(c.mint);
+      if (!m || !m.price){ c.gone = (c.gone || 0) + 1; if (c.gone >= 3 && !c.struck) crashed(c); continue; }
+      const r = m.price / c.p0;
+      c.hi = Math.max(c.hi || 1, r); c.lo = Math.min(c.lo || 1, r); c.last = r; c.lastAt = now();
+      if (r <= 0.1 && !c.struck) crashed(c);
+    }
+    await rcStep();
+    save(); renderRejects(); renderBlacklist();
+  } finally { tracking = false; }
+}
+const median = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), i = b.length >> 1; return b.length % 2 ? b[i] : (b[i - 1] + b[i]) / 2; };
+function afterStats(all){
+  const g = {};
+  for (const c of all) if ((c.status === 'rejected' || c.status === 'expired') && c.hi && c.lastAt && c.lastAt - c.t0 > 10 * 60000) (g[c.reason] = g[c.reason] || []).push(c);
+  const out = {};
+  for (const [k, a] of Object.entries(g)) out[k] = {n:a.length, hi:median(a.map(c => c.hi - 1)), last:median(a.map(c => (c.gone >= 3 ? 0 : c.last) - 1))};
+  return out;
+}
+function renderRejects(){
+  const list = Object.entries(S.rejects).sort((a, b) => b[1] - a[1]);
+  const total = list.reduce((s, x) => s + x[1], 0);
+  $('#rejNote').textContent = total ? total.toLocaleString() + ' coins skipped so far' : '';
+  if (!list.length){ $('#rejects').innerHTML = '<div class="muted" style="padding:6px 0">Once it starts checking coins, this shows the most common reasons they fail. It tells you which rules do the most work.</div>'; return; }
+  const max = list[0][1];
+  const after = S._after || afterStats(Object.values(S.seen));
+  const aft = k => {
+    const a = after[k]; if (!a || a.n < 3) return '<span class="a">—</span>';
+    return '<span class="a" title="Typical best price after skipping, and where it is now (' + a.n + ' coins followed)"><span class="' + cls(a.hi) + '">' + pctS(a.hi) + '</span> / <span class="' + cls(a.last) + '">' + pctS(a.last) + '</span></span>';
+  };
+  $('#rejects').innerHTML = '<div class="bar head"><span>Reason</span><i style="visibility:hidden"></i><span class="n">Coins</span><span class="a">High after / now</span></div>' +
+    list.slice(0, 14).map(([k, n]) => '<div class="bar"><span>' + esc(k) + '</span><i style="width:' + Math.max(2, 100 * n / max) + '%"></i><span class="n">' + n + '</span>' + aft(k) + '</div>').join('') +
+    '<div class="muted" style="font-size:.8rem;margin-top:8px">"High after / now" follows skipped coins for 2 hours. Big highs on a rule mean it may be skipping winners; big drops mean it is saving you money.</div>';
+}
+function renderChart(){
+  const pts = S.equity.concat([[now(), equity()]]);
+  const el = $('#chart');
+  $('#eqNote').textContent = dollars(equity());
+  if (pts.length < 2){ el.innerHTML = ''; return; }
+  const W = 600, H = 250, pad = {l:52, r:10, t:10, b:22};
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs, x0 + 60000);
+  let y0 = Math.min(...ys, S.start), y1 = Math.max(...ys, S.start);
+  if (y1 - y0 < S.start * 0.02){ y0 -= S.start * 0.01; y1 += S.start * 0.01; }
+  const X = t => pad.l + (W - pad.l - pad.r) * (t - x0) / (x1 - x0);
+  const Y = v => pad.t + (H - pad.t - pad.b) * (1 - (v - y0) / (y1 - y0));
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ' ' + Y(p[1]).toFixed(1)).join(' ');
+  const last = ys[ys.length - 1], col = last >= S.start ? 'var(--up)' : 'var(--down)';
+  const ticks = [y0, (y0 + y1) / 2, y1];
+  el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Fake balance over time">' +
+    ticks.map(v => '<line x1="' + pad.l + '" x2="' + (W - pad.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--line)" stroke-width="1"/><text x="' + (pad.l - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">' + '$' + Math.round(v).toLocaleString() + '</text>').join('') +
+    '<line x1="' + pad.l + '" x2="' + (W - pad.r) + '" y1="' + Y(S.start) + '" y2="' + Y(S.start) + '" stroke="var(--muted)" stroke-dasharray="3 4" stroke-width="1"/>' +
+    '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>' +
+    '<text x="' + pad.l + '" y="' + (H - 5) + '" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">' + new Date(x0).toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + clock(x0) + '</text>' +
+    '<text x="' + (W - pad.r) + '" y="' + (H - 5) + '" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">now</text></svg>';
+}
+function renderMode(){
+  $('#curveT').checked = !!CFG.allowCurve;
+  const q = CFG.tpUsd > 0;
+  $('#mQuick').classList.toggle('on', q); $('#mRun').classList.toggle('on', !q);
+  $('#mQuick').textContent = 'Quick flips' + (q ? ' (+' + usd(+CFG.tpUsd) + ')' : '');
+  $('#modeNote').textContent = q
+    ? 'Sells the whole trade once it is up ' + usd(+CFG.tpUsd) + ' after fees, or down ' + CFG.stopLoss + '%. Gives up after ' + CFG.maxHoldMin + ' min.'
+    : 'Sells half at +' + CFG.takeProfit + '%, lets the rest ride with a trailing stop. Stop at −' + CFG.stopLoss + '%.';
+}
+function renderStrat(){
+  const T = S.trades, wins = T.filter(t => t.pnl > 0), losses = T.filter(t => t.pnl <= 0);
+  const avgW = wins.length ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : null;
+  const avgL = losses.length ? -losses.reduce((s, t) => s + t.pnl, 0) / losses.length : null;
+  const costs = T.reduce((s, t) => s + (t.costs || 0), 0);
+  const per = T.length ? T.reduce((s, t) => s + t.pnl, 0) / T.length : null;
+  const be = avgW != null && avgL != null && avgW + avgL > 0 ? avgL / (avgW + avgL) : null;
+  const wr = T.length ? wins.length / T.length : null;
+  const firstAt = T.length ? Math.min(...T.map(t => t.at)) : 0;
+  const hrs = T.length ? Math.max(0.25, (now() - firstAt) / 3600e3) : 0;
+  const tiles = [
+    ['Average win', avgW != null ? '<span class="up">' + money(avgW) + '</span>' : '—', wins.length + ' winning trade' + (wins.length === 1 ? '' : 's')],
+    ['Average loss', avgL != null ? '<span class="down">' + money(-avgL) + '</span>' : '—', losses.length + ' losing trade' + (losses.length === 1 ? '' : 's')],
+    ['Profit per trade', per != null ? '<span class="' + cls(per) + '">' + money(per) + '</span>' : '—', 'after all fees and slippage'],
+    ['Win rate needed', be != null ? Math.round(be * 100) + '%' : '—', be != null && wr != null ? 'to break even · you have ' + Math.round(wr * 100) + '%' : 'shows after a win and a loss'],
+    ['Fees + slippage paid', T.length ? usd(costs) : '—', T.length ? (T.length / hrs).toFixed(1) + ' trades per hour' : 'no finished trades yet'],
+  ];
+  $('#strat').innerHTML = tiles.map(([k, v, s2]) => '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s2 + '</div></div>').join('');
+}
+function render(){ renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
+
+/* ---------------- settings dialog ---------------- */
+function buildForm(vals){
+  let html = '', g = '';
+  for (const f of FIELDS){
+    if (f.g !== g){ if (g) html += '</fieldset>'; g = f.g; html += '<fieldset><legend>' + esc(g) + '</legend>'; }
+    const id = 'f_' + f.k, v = vals[f.k];
+    const lab = '<label for="' + id + '">' + esc(f.l) + (f.h ? '<span class="h">' + esc(f.h) + '</span>' : '') + '</label>';
+    if (f.t === 'check') html += '<div class="f">' + lab + '<input type="checkbox" id="' + id + '"' + (v ? ' checked' : '') + '></div>';
+    else if (f.t === 'password') html += '<div class="f wide">' + lab + '<input type="password" id="' + id + '" value="' + esc(v) + '" autocomplete="off" spellcheck="false" placeholder="paste your key"></div>';
+    else html += '<div class="f">' + lab + '<div class="in">' + (f.u === '$' ? '<span>$</span>' : '') + '<input type="number" step="any" min="0" id="' + id + '" value="' + esc(v) + '">' + (f.u && f.u !== '$' ? '<span>' + esc(f.u) + '</span>' : '') + '</div></div>';
+  }
+  $('#form').innerHTML = html + '</fieldset>';
+}
+function readForm(){
+  const out = {};
+  for (const f of FIELDS){
+    const el = $('#f_' + f.k);
+    if (f.t === 'check') out[f.k] = el.checked;
+    else if (f.t === 'password') out[f.k] = el.value.trim();
+    else { const n = parseFloat(el.value); out[f.k] = isFinite(n) && n >= 0 ? n : DEF[f.k]; }
+  }
+  return out;
+}
+/* ---------------- actions (shared by this page, and by the server when it runs the bot) ---------------- */
+function doToggle(){ S.running ? pause() : start(); }
+function doMode(m){
+  const pre = Object.assign({}, PRESETS[m]);
+  if (m === 'quick' && CFG.tpUsd > 0) pre.tpUsd = CFG.tpUsd;
+  CFG = Object.assign({}, CFG, pre); store.set('cfg', CFG);
+  feed('info', '', m === 'quick' ? 'Switched to quick flips: sells at ' + money(+CFG.tpUsd) + ' profit or −' + CFG.stopLoss + '%.' : 'Switched to letting winners run.');
+  render();
+}
+function doCurve(on){
+  CFG = Object.assign({}, CFG, {allowCurve:!!on}); store.set('cfg', CFG);
+  if (CFG.allowCurve) for (const c of Object.values(S.seen)) if (c.status === 'waiting' && /pump\.fun curve/.test(c.reason)) c.next = now();
+  feed('info', '', CFG.allowCurve ? 'Now also trading coins still on the pump.fun curve. These are riskier, and liquidity is an estimate.' : 'Back to graduated coins only.');
+  save(); render();
+}
+function doSettings(n){
+  const old = CFG;
+  if (!n.heliusKey && old.heliusKey && n._keepKey) n.heliusKey = old.heliusKey;
+  delete n._keepKey;
+  CFG = Object.assign({}, DEF, n); store.set('cfg', CFG);
+  if (CFG.heliusKey !== old.heliusKey){ DEEP_OFF = ''; MODE = 'gtfa'; HEALTH.hel = null; }
+  if (CFG.startCash !== old.startCash && !S.trades.length && !S.positions.length){ S.cash = S.start = +CFG.startCash; S.equity = [[now(), S.start]]; }
+  save(); render();
+}
+function doReset(){
+  const running = S.running, keepBL = S.blacklist, keepStrikes = S.strikes;
+  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.funderQueue = []; S.rcQueue = [];
+  save(); render(); renderFeed();
+}
+function doSell(id){ const p = S.positions.find(x => x.id === id); if (p) closePos(p, 'you sold it by hand'); }
+function doBlAdd(a){ return blAdd(a, {kind:'manual', why:'added by you'}); }
+function doBlRemove(a){ delete S.blacklist[a]; delete S.strikes[a]; save(); renderBlacklist(); }
+function exportData(){
+  const cfg = Object.assign({}, CFG); cfg.heliusKey = cfg.heliusKey ? '(set)' : '';
+  const pick = c => ({mint:c.mint, sym:c.sym, src:c.src, status:c.status, reason:c.reason, detail:c.detail, tries:c.tries, first:c.first, passedQuick:!!c.passedQuick,
+    creator:c.creator, snap0:c.snap0, snap:c.snap, hi:c.hi, lo:c.lo, last:c.last, lastAt:c.lastAt, gone:c.gone, deep:c.deep && c.deep.res});
+  return {app:'Coin Scout', version:VERSION, exportedAt:new Date().toISOString(), cfg, cash:S.cash, start:S.start, equityNow:equity(), stats:S.stats,
+    blacklist:S.blacklist, strikes:S.strikes,
+    rejects:S.rejects, trades:S.trades, positions:S.positions, equity:S.equity, log:S.log, coins:Object.values(S.seen).map(pick)};
+}
+/* the server calls these */
+function remoteCmd(c){
+  switch (c && c.action){
+    case 'toggle': doToggle(); break;
+    case 'mode': doMode(c.value === 'run' ? 'run' : 'quick'); break;
+    case 'curve': doCurve(c.value); break;
+    case 'settings': doSettings(Object.assign({}, c.value || {})); break;
+    case 'reset': doReset(); break;
+    case 'sell': doSell(c.value); break;
+    case 'bladd': return doBlAdd(String(c.value || '')) ? 'ok' : 'exists';
+    case 'blremove': doBlRemove(String(c.value || '')); break;
+    default: return 'unknown';
+  }
+  return 'ok';
+}
+function slim(){
+  const all = Object.values(S.seen);
+  const s = Object.assign({}, S, {seen:{}, funderQueue:[], rcQueue:[], equity:S.equity.slice(-800)});
+  s._waiting = all.filter(c => c.status === 'waiting' || c.status === 'new').length;
+  s._after = afterStats(all);
+  return {S:s, CFG:Object.assign({}, CFG, {heliusKey:'', _hasKey:!!CFG.heliusKey}), BUSY, HEALTH, HEALTH_MSG, DEEP_OFF, serverTime:now()};
+}
+
+/* ---------------- settings dialog ---------------- */
+$('#setBtn').onclick = () => {
+  buildForm(CFG);
+  if (IS_REMOTE && CFG._hasKey){ const f = $('#f_heliusKey'); if (f){ f.value = ''; f.placeholder = 'Key saved on the server. Leave blank to keep it.'; } }
+  resetArm = false; $('#resetBtn').textContent = 'Reset balance and journal'; $('#dlg').showModal();
+};
+function openKey(){
+  $('#setBtn').click();
+  const f = $('#f_heliusKey');
+  if (f){ f.scrollIntoView({block:'center'}); setTimeout(() => f.focus(), 50); }
+}
+$('#dlgX').onclick = () => $('#dlg').close();
+$('#defBtn').onclick = () => buildForm(Object.assign({}, DEF, {heliusKey:IS_REMOTE ? '' : CFG.heliusKey}));
+$('#saveBtn').onclick = () => {
+  const n = readForm();
+  if (IS_REMOTE){ n._keepKey = true; send('settings', n); }
+  else doSettings(n);
+  $('#dlg').close();
+};
+let resetArm = false;
+$('#resetBtn').onclick = () => {
+  if (!resetArm){ resetArm = true; $('#resetBtn').textContent = 'Click again to erase everything'; return; }
+  IS_REMOTE ? send('reset') : doReset();
+  $('#dlg').close();
+};
+
+/* ---------------- controls ---------------- */
+$('#goBtn').onclick = () => IS_REMOTE ? send('toggle') : doToggle();
+$('#blBtn').onclick = () => {
+  const a = ($('#blInput').value || '').trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)){ $('#blInput').value = ''; $('#blInput').placeholder = "That doesn't look like a Solana address. Try again."; return; }
+  if (IS_REMOTE){ send('bladd', a); $('#blInput').value = ''; }
+  else if (doBlAdd(a)) $('#blInput').value = '';
+};
+$('#blist').addEventListener('click', e => {
+  const a = e.target && e.target.getAttribute('data-unbl'); if (!a) return;
+  IS_REMOTE ? send('blremove', a) : doBlRemove(a);
+});
+$('#curveT').onchange = e => IS_REMOTE ? send('curve', e.target.checked) : doCurve(e.target.checked);
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => IS_REMOTE ? send('mode', b.getAttribute('data-mode')) : doMode(b.getAttribute('data-mode')));
+$('#wake').onchange = e => { store.set('wake', e.target.checked); if (S.running) setWake(e.target.checked); };
+$('#showAll').onchange = e => { SHOW_ALL = e.target.checked; store.set('showAll', SHOW_ALL); renderFeed(); };
+$('#open').addEventListener('click', e => {
+  const id = e.target && e.target.getAttribute('data-sell'); if (!id) return;
+  IS_REMOTE ? send('sell', id) : doSell(id);
+});
+$('#csvBtn').onclick = () => {
+  const head = ['coin','mint','bought','sold','paid_usd','got_back_usd','profit_usd','profit_pct','high_pct','why_sold','why_bought'];
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = S.trades.map(t => [t.sym, t.mint, new Date(t.at).toISOString(), new Date(t.sold).toISOString(), t.cost.toFixed(2), t.out.toFixed(2), t.pnl.toFixed(2), (t.pnlPct * 100).toFixed(1), (t.peakPct * 100).toFixed(1), t.exitWhy + (t.half ? '; earlier: ' + t.half : ''), t.why].map(q).join(','));
+  const blob = new Blob([head.join(',') + '\n' + rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'coin-scout-journal.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('#dataBtn').onclick = () => {
+  if (IS_REMOTE){ location.href = '/api/export'; return; }
+  const blob = new Blob([JSON.stringify(exportData())], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'coin-scout-data-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+function applyTheme(t){
+  if (t) document.documentElement.setAttribute('data-theme', t);
+  const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  $('#themeBtn').textContent = dark ? 'Light mode' : 'Dark mode';
+}
+$('#themeBtn').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const t = cur === 'dark' ? 'light' : 'dark'; store.set('theme', t); applyTheme(t); renderChart();
+};
+
+/* ---------------- talking to the server (only when this page is opened from the server) ---------------- */
+let lastOk = 0, srvInfo = {};
+async function send(action, value){
+  try{
+    const r = await fetch('/api/cmd', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, value})});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  }catch(e){ showConn('Couldn’t reach the server: ' + e.message); }
+  setTimeout(poll, 300);
+}
+function showConn(msg){
+  let b = $('#connBanner');
+  if (!b){ b = document.createElement('div'); b.id = 'connBanner'; b.className = 'banner bad'; $('#banners').before(b); }
+  b.style.display = msg ? '' : 'none'; b.textContent = msg || '';
+}
+let polling = false;
+async function poll(){
+  if (polling) return; polling = true;
+  try{
+    const r = await fetch('/api/state', {cache:'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    S = d.S; CFG = d.CFG; DEEP_OFF = d.DEEP_OFF || '';
+    Object.assign(HEALTH, d.HEALTH || {}); Object.assign(HEALTH_MSG, d.HEALTH_MSG || {});
+    srvInfo = d.server || {};
+    setBusy(d.BUSY || '');
+    lastOk = now(); showConn('');
+    render(); renderFeed(); renderServer();
+  }catch(e){
+    if (now() - lastOk > 15000) showConn('Can’t reach the server right now. Retrying… (' + e.message + ')');
+  } finally { polling = false; }
+}
+function renderServer(){
+  let el = $('#srvLine');
+  if (!el){
+    el = document.createElement('div'); el.id = 'srvLine'; el.className = 'muted';
+    el.style.cssText = 'font-size:.85rem;margin:-8px 0 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap';
+    $('.statusline').after(el);
+  }
+  const up = srvInfo.upSince ? ago(now() - srvInfo.upSince) : '?';
+  el.innerHTML = '<span>Running on your server · up ' + up + (srvInfo.version ? ' · code ' + esc(srvInfo.version) : '') + '</span>' +
+    '<a href="/gold">Gold diary</a><button class="btn small" id="updBtn">Check for updates</button><span id="updMsg"></span>';
+  $('#updBtn').onclick = async () => {
+    $('#updMsg').textContent = 'Updating… the page will come back in about 30 seconds.';
+    try{ await fetch('/api/update', {method:'POST'}); }catch(e){}
+    setTimeout(() => location.reload(), 30000);
+  };
+}
+
+/* ---------------- boot ---------------- */
+if (IS_ENGINE){
+  /* the server runs the bot here; nobody looks at this copy of the page, so skip drawing it */
+  render = renderFeed = renderStatus = renderStats = renderOpen = renderJournal = renderRejects = renderChart = renderHealth =
+    renderBanners = renderMode = renderStrat = renderWhatIf = renderBlacklist = function(){};
+}
+applyTheme(store.get('theme'));
+if (IS_REMOTE){
+  /* this page is just the screen: the bot runs on the server */
+  $('#wake').parentElement.style.display = 'none';
+  $('.how ol').insertAdjacentHTML('beforeend', '<li>This copy runs on your server, so it keeps going when your laptop is closed. This page only shows what it is doing.</li>');
+  SHOW_ALL = !!store.get('showAll'); $('#showAll').checked = SHOW_ALL;
+  render(); renderFeed();
+  poll(); setInterval(poll, 3000);
+} else {
+  $('#wake').checked = !!store.get('wake');
+  SHOW_ALL = IS_ENGINE ? true : !!store.get('showAll'); $('#showAll').checked = SHOW_ALL;
+  render(); renderFeed();
+  if (S.running){ feed('info', '', IS_ENGINE ? 'Server started. Picking up where it left off.' : 'Page reopened. Picking up where it left off.'); if (!IS_ENGINE && $('#wake').checked) setWake(true); }
+  solPrice();
+  worker();
+  setInterval(() => { if (S.running) scanSources(); }, 30000);
+  (async () => { for (;;){ try{ await monitor(); }catch(e){} await sleep(Math.max(3, +CFG.priceEvery || 5) * 1000); } })();
+  setInterval(holderWatch, 30000);
+  setInterval(trackSkipped, 5 * 60000);
+  setInterval(trackSold, 60000);
+  setInterval(solPrice, 10 * 60000);
+  setInterval(() => { if (S.running || S.positions.length){ equityPoint(); save(); } }, 5 * 60000);
+  if (!IS_ENGINE) setInterval(() => { renderStatus(); renderStats(); renderOpen(); renderChart(); }, 5000);
+  if (S.running) scanSources();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+{ "name": "coin-scout-server", "version": "1.0.0", "private": true, "dependencies": { "jsdom": "24.1.3" } }
