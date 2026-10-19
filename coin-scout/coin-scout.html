@@ -164,7 +164,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v7 · Oct 18</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v8 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -259,7 +259,8 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 'use strict';
 const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
 const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
-const VERSION = 'v7 · Oct 18';
+const hasKey = () => !!(CFG.heliusKey || CFG._hasKey);
+const VERSION = 'v8 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -408,7 +409,7 @@ async function getJSON(h, url){
 }
 
 /* ---------------- finding new coins ---------------- */
-let scanning = false, lastScanErr = '';
+let scanning = false, feedFailSince = 0, feedErrShown = false;
 async function scanSources(){
   if (scanning) return; scanning = true;
   const found = [];
@@ -439,9 +440,14 @@ async function scanSources(){
       added++; S.stats.seen++;
     }
     S.lastScan = now();
-    const errMsg = errs.join(' · ');
-    if (errMsg && errMsg !== lastScanErr) feed('error', '', "Couldn't reach a coin source: " + errMsg + '. Will keep trying.');
-    lastScanErr = errMsg;
+    /* the coin list sometimes asks us to wait a minute. That's normal, so only speak up if it lasts */
+    if (errs.length && !found.length){
+      if (!feedFailSince) feedFailSince = now();
+      if (!feedErrShown && now() - feedFailSince > 5 * 60000){ feedErrShown = true; feed('error', '', "The new-coin list hasn't answered for 5 minutes (" + errs[0] + '). Still trying every 30 seconds.'); }
+    } else {
+      if (feedErrShown) feed('info', '', 'The new-coin list is answering again.');
+      feedFailSince = 0; feedErrShown = false;
+    }
     save(); renderStatus();
   } finally { scanning = false; }
 }
@@ -1177,7 +1183,7 @@ function verdict(c, r){
   c.reason = r.key; c.detail = r.detail;
   if (r.hard){
     c.status = 'rejected'; countReject(r.key);
-    if (r.key !== 'Too old' || SHOW_ALL) feed('reject', c.sym || short(c.mint), 'Skipped: ' + r.key + (r.detail ? ' (' + r.detail + ')' : ''), tagOf(c.mint));
+    feed(r.key === 'Too old' ? 'wait' : 'reject', c.sym || short(c.mint), 'Skipped: ' + r.key + (r.detail ? ' (' + r.detail + ')' : ''), tagOf(c.mint));
     return;
   }
   if (c.tries >= MAX_TRIES || now() - c.first > CFG.maxAgeHr * 3600e3){
@@ -1306,8 +1312,8 @@ let BUSY = '';
 function setBusy(t){ BUSY = t; const b = $('#busy'); if (b) b.textContent = t; }
 function renderHealth(){
   const name = {gt:'New coins', ds:'Prices', rc:'RugCheck', jup:'Jupiter', hel:'Helius'};
-  const st = h => h === 'hel' && !CFG.heliusKey ? 'off' : HEALTH[h] || '';
-  $('#health').innerHTML = Object.keys(name).map(h => '<span title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
+  const st = h => h === 'hel' && !hasKey() ? 'off' : HEALTH[h] || '';
+  $('#health').innerHTML = Object.keys(name).map(h => '<span title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : h === 'hel' && !HEALTH[h] ? 'Key saved. Turns green when the first coin reaches the deep check.' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
 }
 function renderStatus(){
   const waiting = S._waiting != null ? S._waiting : Object.values(S.seen).filter(c => c.status === 'waiting' || c.status === 'new').length;
@@ -1321,7 +1327,7 @@ function renderStatus(){
 function renderBanners(){
   const out = [];
   if (DEEP_OFF) out.push('<div class="banner bad"><b>Deep check is off.</b> ' + esc(DEEP_OFF) + ' Coins are still checked with RugCheck. Fix the key, then reload the page.<button class="btn small" id="keyBtn">Fix Helius key</button></div>');
-  else if (CFG.useDeep && !CFG.heliusKey) out.push('<div class="banner"><b>Deep check skipped:</b> add your Helius API key to run the Token Detective check before each buy. Everything else works without it.<button class="btn small" id="keyBtn">Add Helius key</button></div>');
+  else if (CFG.useDeep && !hasKey()) out.push('<div class="banner"><b>Deep check skipped:</b> add your Helius API key to run the Token Detective check before each buy. Everything else works without it.<button class="btn small" id="keyBtn">Add Helius key</button></div>');
   $('#banners').innerHTML = out.join('');
   const kb = $('#keyBtn'); if (kb) kb.onclick = openKey;
 }
@@ -1749,7 +1755,7 @@ function renderServer(){
   }
   const up = srvInfo.upSince ? ago(now() - srvInfo.upSince) : '?';
   el.innerHTML = '<span>Running on your server · up ' + up + (srvInfo.version ? ' · code ' + esc(srvInfo.version) : '') + '</span>' +
-    '<a href="/gold">Gold diary</a><button class="btn small" id="updBtn">Check for updates</button><span id="updMsg"></span>';
+    '<button class="btn small" id="updBtn">Check for updates</button><span id="updMsg"></span>';
   $('#updBtn').onclick = async () => {
     $('#updMsg').textContent = 'Updating… the page will come back in about 30 seconds.';
     try{ await fetch('/api/update', {method:'POST'}); }catch(e){}

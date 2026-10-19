@@ -1,4 +1,4 @@
-# Daily gold diary: same as the Mac version, but the diary lives next to this script on the server.
+# GOLD AGENT: daily gold diary (same as the Mac version). Data lives in /var/lib/gold-agent.
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
@@ -10,7 +10,7 @@ import csv
 import os
 import requests
 import sys
-from config import API_KEY, SECRET_KEY, FRED_KEY
+from config import API_KEY, SECRET_KEY, FRED_KEY, GOLD_HOME
 
 TZ = ZoneInfo("America/Los_Angeles")
 trading = TradingClient(API_KEY, SECRET_KEY, paper=True)
@@ -63,7 +63,7 @@ if today in fed_days:
     happened.append("Fed decision")
 events = ", ".join(happened) if happened else "none"
 now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
-diary = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gold_diary.csv")
+diary = os.path.join(GOLD_HOME, "gold_diary.csv")
 os.makedirs(os.path.dirname(diary), exist_ok=True)
 header = ["Timestamp", "Gold Price (GLD)", "Gold Direction", "Gold Change ($)", "Dollar Direction", "Inflation (CPI)", "Events"]
 

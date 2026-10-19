@@ -1,9 +1,13 @@
-# Watchtower
+# watchtower
 
-Paper-trading bot for new Solana coins (fake money only). Runs 24/7 on a small server; open its address in a browser to watch it.
+Daniel's server. It holds **two separate projects** that share nothing but the machine:
 
-Install on a fresh Ubuntu 24.04 server (as root):
+| Project | Folder | Data on the server | Page |
+|---|---|---|---|
+| **Coin Scout**: meme-coin quick-flip bot (paper trading) | `coin-scout/` | `/var/lib/coin-scout` | `http://<server>` |
+| **Gold Agent**: gold day-trading project (daily diary for now) | `gold-agent/` | `/var/lib/gold-agent` | `http://<server>:8080` |
 
-    curl -fsSL https://raw.githubusercontent.com/cultureXD-jpg/watchtower/main/server/install.sh | bash
+Each has its own installer, updater, password and data. Install one or both on a fresh Ubuntu server (as root):
 
-`coin-scout.html` also works on its own: double-click it to run in a browser tab.
+    bash /opt/watchtower/coin-scout/server/install.sh
+    bash /opt/watchtower/gold-agent/install.sh

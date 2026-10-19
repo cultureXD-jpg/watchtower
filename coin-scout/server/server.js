@@ -8,9 +8,9 @@ const { execFile } = require('child_process');
 const { JSDOM, VirtualConsole } = require('jsdom');
 
 const DIR = __dirname;
-const DATA = process.env.COINSCOUT_DATA || path.join(DIR, 'data');
+const DATA = process.env.COINSCOUT_DATA || '/var/lib/coin-scout';
 const PORT = +process.env.PORT || 80;
-const HTML_FILE = path.join(DIR, 'coin-scout.html');
+const HTML_FILE = path.join(DIR, '..', 'coin-scout.html');
 const STORE_FILE = path.join(DATA, 'storage.json');
 const PASS_FILE = path.join(DATA, 'password.txt');
 fs.mkdirSync(DATA, {recursive:true});
@@ -90,24 +90,6 @@ http.createServer(async (req, res) => {
     if (req.method === 'GET' && (url === '/' || url === '/index.html')){
       res.writeHead(200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'});
       return res.end(html);
-    }
-    if (req.method === 'GET' && (url === '/gold' || url === '/gold.csv')){
-      const f = path.join(DIR, '..', 'gold', 'data', 'gold_diary.csv');
-      let csv = ''; try{ csv = fs.readFileSync(f, 'utf8'); }catch(e){}
-      if (url === '/gold.csv'){ res.writeHead(200, {'Content-Type':'text/csv', 'Content-Disposition':'attachment; filename="gold_diary.csv"'}); return res.end(csv); }
-      const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-      const rows = csv.trim().split('\n').filter(Boolean).map(l => l.split(','));
-      const head = rows.shift() || [];
-      const keyOk = fs.existsSync(path.join(DIR, '..', 'gold', '.env'));
-      res.writeHead(200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'});
-      return res.end('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gold diary</title><style>' +
-        ':root{color-scheme:light dark;--bg:#F2F0EA;--s:#fff;--i:#15171C;--m:#5D636F;--l:#DCD8CE;--up:#0B9466;--dn:#D9412A}@media (prefers-color-scheme:dark){:root{--bg:#0D0F13;--s:#15181E;--i:#ECEEF2;--m:#9399A5;--l:#262A33;--up:#33D399;--dn:#FF6B57}}' +
-        'body{margin:0;background:var(--bg);color:var(--i);font:15px/1.5 system-ui,sans-serif}.w{max-width:900px;margin:0 auto;padding:22px 16px}h1{font-size:1.7rem;margin:0 0 4px}p{color:var(--m);margin:0 0 16px}a{color:inherit}' +
-        '.t{background:var(--s);border:1px solid var(--l);border-radius:14px;overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:620px}th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--m);padding:9px 12px;border-bottom:1px solid var(--l)}td{padding:9px 12px;border-bottom:1px solid var(--l);font-variant-numeric:tabular-nums}tr:last-child td{border:0}.up{color:var(--up)}.down{color:var(--dn)}</style></head><body><div class="w">' +
-        '<h1>Gold diary</h1><p>One entry every market day at 1:15 PM, written by your server. ' + (keyOk ? '' : '<b>Keys not set yet</b>: run <code>bash /opt/coin-scout/server/gold-keys.sh</code> in the server console. ') + '<a href="/gold.csv">Download CSV</a> · <a href="/">Back to Coin Scout</a></p>' +
-        '<div class="t"><table><thead><tr>' + head.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
-        rows.reverse().map(r => '<tr>' + r.map((c, i) => '<td' + ((i === 2 || i === 4) ? ' class="' + esc(c) + '"' : '') + '>' + esc(c) + '</td>').join('') + '</tr>').join('') +
-        '</tbody></table></div></div></body></html>');
     }
     if (req.method === 'GET' && url === '/api/state'){
       const d = W.eval('slim()');

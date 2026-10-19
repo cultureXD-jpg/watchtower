@@ -1,7 +1,5 @@
 node_modules/
-server/data/
-server/coin-scout.html
-gold/.env
-gold/data/
-gold/.venv/
+.venv/
 __pycache__/
+.env
+*.csv.bak

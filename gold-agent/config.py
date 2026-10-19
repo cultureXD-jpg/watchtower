@@ -1,6 +1,7 @@
 import os
 
-env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+GOLD_HOME = os.environ.get("GOLD_HOME", "/var/lib/gold-agent")
+env_path = os.path.join(GOLD_HOME, ".env")
 
 if os.path.exists(env_path):
     with open(env_path) as f:
@@ -13,7 +14,7 @@ if os.path.exists(env_path):
 def need(name):
     value = os.environ.get(name)
     if not value:
-        raise SystemExit(f"Missing {name} - run: bash /opt/coin-scout/server/gold-keys.sh")
+        raise SystemExit(f"Missing {name} - run: bash /opt/watchtower/gold-agent/keys.sh")
     return value
 
 API_KEY = need("ALPACA_API_KEY")
