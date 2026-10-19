@@ -54,6 +54,11 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px
 .dot.live{background:var(--up);box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 60%,transparent);animation:pulse 2s infinite}
 @keyframes pulse{70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
 .health span{margin-right:12px;white-space:nowrap}
+/* keep the status dots still: they sit first, and the changing text gets its own line */
+.statusline .health{order:-1}
+.statusline #runState{order:0}
+.statusline label{order:1}
+.statusline #busy{order:2;flex:1 1 100%;min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-8px}
 .busy{color:var(--ink)}
 
 .banner{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 14px;margin:0 0 16px;font-size:.92rem}
@@ -164,7 +169,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v11 · Oct 19</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v12 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -259,8 +264,10 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 'use strict';
 const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
 const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
-const hasKey = () => !!(CFG.heliusKey || CFG._hasKey);
-const VERSION = 'v11 · Oct 19';
+const SECRETS = ['heliusKey', 'tgToken'];
+const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
+const hasKey = () => hasSecret('heliusKey');
+const VERSION = 'v12 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -312,6 +319,7 @@ const FIELDS = [
   {k:'rejectInsiders', l:'Skip coins where RugCheck finds insider wallets', t:'check', d:true},
   {g:'Deep check (your Token Detective)', k:'heliusKey', l:'Helius API key', t:'password', d:'', h:'Optional. Without it the deep check is skipped. Same key as Token Detective (dashboard.helius.dev).', wide:true},
   {k:'useDeep', l:'Run the deep check before buying', t:'check', d:true},
+  {k:'liveFeed', l:'Live feed: catch coins the moment they graduate from pump.fun', t:'check', d:true, h:'Uses your Helius key. Works alongside the GeckoTerminal list.'},
   {k:'maxLinked', l:'Linked wallet groups can hold at most', u:'%', d:10},
   {k:'maxCreatorGroup', l:"Creator's group can hold at most", u:'%', d:3},
   {k:'maxBundled', l:'Skip if at least this many wallets bought in the launch block', d:2},
@@ -319,11 +327,17 @@ const FIELDS = [
   {g:'Deployer blacklist', k:'blAuto', l:'Blacklist deployers automatically', t:'check', d:true, h:'A coin that clearly rugs gets its deployer blacklisted right away.'},
   {k:'blStrikes', l:'Also blacklist a deployer after this many of their coins crash 90%+', d:2},
   {k:'blFunders', l:'Also blacklist whoever funded a blacklisted deployer', t:'check', d:true, h:'Needs your Helius key. Exchanges are left out.'},
+  {g:'Phone alerts (Telegram)', k:'tgToken', l:'Telegram bot token', t:'password', d:'', wide:true, h:'In Telegram, message @BotFather, send /newbot, follow the steps, and paste the token it gives you here. Then send any message to your new bot.'},
+  {k:'tgChat', l:'Telegram chat ID', t:'text', d:'', wide:true, h:'Filled in automatically after you send your bot a message.'},
+  {k:'tgTrades', l:'Message me on every buy and sell', t:'check', d:true},
+  {k:'tgDaily', l:'Send a daily summary at 9 PM (California time)', t:'check', d:true},
+  {k:'tgHealth', l:'Warn me if Coin Scout stops working', t:'check', d:true},
+  {k:'tgTestBtn', l:'Save first, then send yourself a test message.', t:'button', b:'Send test message', skip:true},
   {g:'Costs (keeps fake trades realistic)', k:'swapFee', l:'Trading fee on each buy and sell', u:'%', d:1},
   {k:'netFee', l:'Network and priority fee per trade', u:'$', d:0.3},
 ];
 { let g = ''; for (const f of FIELDS){ if (f.g) g = f.g; else f.g = g; } }
-const DEF = Object.fromEntries(FIELDS.map(f => [f.k, f.d]));
+const DEF = Object.fromEntries(FIELDS.filter(f => !f.skip).map(f => [f.k, f.d]));
 const PRESETS = {
   quick:{tpUsd:5, stopLoss:10, halfAtTP:false, trailStart:12, trail:5, maxHoldMin:30, maxOpen:8, minAgeMin:5},
   run:{tpUsd:0, stopLoss:35, halfAtTP:true, trailStart:40, trail:25, maxHoldMin:360, maxOpen:5, minAgeMin:10}
@@ -378,7 +392,7 @@ function feed(kind, sym, text, tag){
 
 /* ---------------- web requests ---------------- */
 const HOST = {gt:{gap:2200, next:0, name:'New coins'}, ds:{gap:260, next:0, name:'Prices'}, rc:{gap:900, next:0, name:'RugCheck'}, jup:{gap:1100, next:0, name:'Jupiter'}};
-const HEALTH = {gt:null, ds:null, rc:null, jup:null, hel:null};
+const HEALTH = {gt:null, live:null, ds:null, rc:null, jup:null, hel:null, tg:null};
 const HEALTH_MSG = {};
 function health(h, st, msg){ HEALTH[h] = st; HEALTH_MSG[h] = msg || ''; renderHealth(); }
 async function getJSON(h, url){
@@ -1053,6 +1067,7 @@ async function buy(c, m, h, deep, dec, creator){
     dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator};
   S.positions.push(p); S.stats.bought++;
   c.status = 'bought'; c.reason = 'Bought';
+  tradeAlert('🟢 <b>Bought ' + esc(p.sym) + '</b>: ' + usd(size) + ' at ' + price(avg) + '\n' + usd(m.mcap) + ' market cap · ' + usd(m.liq) + ' liquidity · via ' + esc(route) + (m.url ? '\n' + m.url : ''));
   feed('buy', p.sym, 'Bought ' + usd(size) + ' at ' + price(avg) + (quoted ? ' (real quote, via ' + route + ')' : ' (estimated)') + '. ' + bits.slice(0, 4).join(' · '), tagOf(p.mint));
   equityPoint(); save(); render();
 }
@@ -1065,6 +1080,7 @@ async function partial(p, frac, why){
     p.costs = (p.costs || 0) + Math.max(0, sold * p.price - r.got);
     p.tokens -= sold; p.realized += r.got; S.cash += r.got; p.tpHit = true;
     p.note = why + ' (' + usd(r.got) + ')';
+    tradeAlert('💰 <b>Sold half of ' + esc(p.sym) + '</b>: ' + esc(why) + ', got back ' + usd(r.got));
     feed('win', p.sym, 'Sold half: ' + why + '. Got back ' + usd(r.got) + (r.quoted ? ' (real quote)' : '') + '; stop on the rest moved to the buy price.', tagOf(p.mint));
   } finally { p.busy = false; }
 }
@@ -1083,6 +1099,7 @@ async function closePos(p, why, zero){
   if (p.creator && /liquidity pulled|marked it as rugged|disappeared/.test(why)) blRug(p.creator, {mint:p.mint, sym:p.sym}, p.sym + ' rugged while we held it (' + why.split(' (')[0] + ')');
   S.trades.unshift(t);
   S.positions = S.positions.filter(x => x !== p);
+  tradeAlert((pnl >= 0 ? '✅' : '🔴') + ' <b>Sold ' + esc(p.sym) + ': ' + money(pnl) + ' (' + pctS(pnl / p.cost) + ')</b>\n' + esc(why.charAt(0).toUpperCase() + why.slice(1)) + '\nFake balance: ' + dollars(equity()));
   feed(pnl >= 0 ? 'win' : 'loss', p.sym, 'Sold: ' + why + '. Result ' + money(pnl) + ' (' + pctS(pnl / p.cost) + ')' + (r.quoted ? ', real quote' : zero ? '' : ', estimated') + '.', tagOf(p.mint));
   equityPoint(); save(); render();
 }
@@ -1331,6 +1348,7 @@ async function worker(){
   for (;;){
     try{
       if (!S.running){ await sleep(1000); continue; }
+      if (liveQueue.length) await liveStep();
       if (S.funderQueue.length) await funderStep();
       const due = Object.values(S.seen).filter(c => (c.status === 'new' || c.status === 'waiting') && c.next <= now())
         .sort((a, b) => a.next - b.next).slice(0, 30);
@@ -1347,6 +1365,118 @@ async function worker(){
       feed('error', '', 'Something went wrong while checking coins: ' + e.message + '. Carrying on.');
       await sleep(5000);
     }
+  }
+}
+
+/* =====================================================================
+   Live feed: coins graduating from pump.fun, straight from Helius
+   ===================================================================== */
+const PUMP_MIGRATION = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
+let liveWS = null, liveTimer = null, liveRetry = 10000, liveQueue = [], liveKey = '';
+function startLive(){
+  if (IS_REMOTE || typeof WebSocket === 'undefined') return;
+  if (liveWS && (liveKey !== CFG.heliusKey || !CFG.liveFeed)){ try{ liveWS.onclose = null; liveWS.close(); }catch(e){} liveWS = null; HEALTH.live = null; }
+  if (liveWS || !CFG.liveFeed || !CFG.heliusKey || DEEP_OFF) return;
+  liveKey = CFG.heliusKey;
+  let ws;
+  try{ ws = new WebSocket('wss://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(CFG.heliusKey)); }catch(e){ health('live', 'err', e.message); return; }
+  liveWS = ws;
+  ws.onopen = () => {
+    ws.send(JSON.stringify({jsonrpc:'2.0', id:1, method:'logsSubscribe', params:[{mentions:[PUMP_MIGRATION]}, {commitment:'confirmed'}]}));
+    health('live', 'ok', 'Listening for pump.fun graduations'); liveRetry = 10000;
+  };
+  ws.onmessage = ev => {
+    let d; try{ d = JSON.parse(ev.data); }catch(e){ return; }
+    const v = d && d.params && d.params.result && d.params.result.value;
+    if (!v || v.err || !v.signature) return;
+    if ((v.logs || []).some(l => /Instruction: Migrate|initialize2/i.test(l)) && liveQueue.length < 200) liveQueue.push(v.signature);
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => { if (liveWS === ws) liveWS = null; health('live', 'err', 'Disconnected, reconnecting'); setTimeout(startLive, liveRetry); liveRetry = Math.min(300000, liveRetry * 2); };
+}
+/* read each graduation and add the coin to the watch list right away */
+async function liveStep(){
+  for (let i = 0; i < 5 && liveQueue.length; i++){
+    const sig = liveQueue.shift();
+    let tx; try{ tx = await rpc('getTransaction', [sig, {encoding:'jsonParsed', maxSupportedTransactionVersion:0, commitment:'confirmed'}], true); }catch(e){ continue; }
+    const bals = ((tx && tx.meta && tx.meta.postTokenBalances) || []).map(b => b.mint).filter(m => m && !STABLE.has(m));
+    let mints = [...new Set(bals)];
+    if (mints.some(m => /pump$/.test(m))) mints = mints.filter(m => /pump$/.test(m));
+    for (const mint of mints.slice(0, 2)){
+      if (S.seen[mint]) { S.seen[mint].next = Math.min(S.seen[mint].next || now(), now()); continue; }
+      S.seen[mint] = {mint, sym:'', src:'Helius live (graduated)', status:'new', first:now(), next:now(), tries:0, reason:''};
+      S.stats.seen++; S.stats.live = (S.stats.live || 0) + 1;
+      feed('wait', '', 'Just graduated from pump.fun: ' + short(mint) + '. Checking it now.', tagOf(mint));
+    }
+  }
+}
+
+/* =====================================================================
+   Telegram alerts and daily summary
+   ===================================================================== */
+let tgFound = false, lastTgErr = '';
+async function tgApi(method, body){
+  const r = await fetch('https://api.telegram.org/bot' + CFG.tgToken + '/' + method, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body || {})});
+  return r.json();
+}
+async function tg(text){
+  if (!CFG.tgToken || !CFG.tgChat || IS_REMOTE) return false;
+  try{
+    const j = await tgApi('sendMessage', {chat_id:CFG.tgChat, text, parse_mode:'HTML', disable_web_page_preview:true});
+    health('tg', j.ok ? 'ok' : 'err', j.ok ? 'Connected' : (j.description || 'error'));
+    return !!j.ok;
+  }catch(e){ health('tg', 'err', e.message); return false; }
+}
+function tradeAlert(text){ if (CFG.tgTrades) tg(text); }
+/* once you message your bot, find your chat automatically */
+async function tgConnect(){
+  if (IS_REMOTE || !CFG.tgToken || CFG.tgChat) return;
+  try{
+    const j = await tgApi('getUpdates', {timeout:0, allowed_updates:['message']});
+    if (!j.ok){ health('tg', 'err', j.description || 'Bot token not accepted'); return; }
+    const msgs = (j.result || []).map(u => u.message).filter(Boolean);
+    if (!msgs.length){ health('tg', '', 'Send any message to your bot in Telegram to finish connecting'); return; }
+    CFG = Object.assign({}, CFG, {tgChat:String(msgs[msgs.length - 1].chat.id)}); store.set('cfg', CFG);
+    await tg('✅ <b>Coin Scout is connected.</b>\nYou\'ll get a message on every buy and sell, a summary each night at 9 PM, and a warning if anything stops working.');
+    feed('info', '', 'Telegram connected.'); save(); render();
+  }catch(e){ health('tg', 'err', e.message); }
+}
+async function tgTest(){
+  if (!CFG.tgChat){ await tgConnect(); if (!CFG.tgChat) return; }
+  const ok = await tg('👋 Test message from Coin Scout. Fake balance: ' + dollars(equity()) + ', ' + S.positions.length + ' open trade' + (S.positions.length === 1 ? '' : 's') + '.');
+  feed(ok ? 'info' : 'error', '', ok ? 'Sent a test message to Telegram.' : 'Couldn’t send to Telegram: ' + (HEALTH_MSG.tg || 'check the token'));
+}
+/* California date/time, wherever the server is */
+function laNow(){
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone:'America/Los_Angeles', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return {day:parts.year + '-' + parts.month + '-' + parts.day, hour:+parts.hour % 24};
+}
+const laDay = t => new Intl.DateTimeFormat('en-CA', {timeZone:'America/Los_Angeles'}).format(new Date(t));
+function dailySummaryText(day){
+  const T = S.trades.filter(t => laDay(t.sold) === day);
+  const wins = T.filter(t => t.pnl > 0), pnl = T.reduce((a, t) => a + t.pnl, 0);
+  const best = T.slice().sort((a, b) => b.pnl - a.pnl)[0], worst = T.slice().sort((a, b) => a.pnl - b.pnl)[0];
+  const all = S.trades, allW = all.filter(t => t.pnl > 0).length;
+  const lines = ['📊 <b>Coin Scout daily summary</b> (' + day + ')',
+    T.length ? 'Trades today: ' + T.length + ' (' + wins.length + ' win' + (wins.length === 1 ? '' : 's') + ', ' + (T.length - wins.length) + ' loss' + (T.length - wins.length === 1 ? '' : 'es') + ')' : 'No trades today.',
+    T.length ? 'Profit today: ' + money(pnl) : null,
+    best ? 'Best: ' + esc(best.sym) + ' ' + money(best.pnl) + ' · Worst: ' + esc(worst.sym) + ' ' + money(worst.pnl) : null,
+    '', 'Fake balance: ' + dollars(equity()) + ' (' + money(equity() - S.start) + ' since start)',
+    all.length ? 'All-time win rate: ' + Math.round(100 * allW / all.length) + '% over ' + all.length + ' trades' : null,
+    'Open trades: ' + S.positions.length + ' · Coins checked so far: ' + S.stats.seen.toLocaleString()];
+  return lines.filter(x => x !== null).join('\n');
+}
+/* every minute: nightly summary, and a warning if scouting has stalled */
+let stallWarned = false;
+function watchdog(){
+  if (IS_REMOTE) return;
+  const t = laNow();
+  if (CFG.tgDaily && t.hour >= 21 && S.lastSummary !== t.day){ S.lastSummary = t.day; save(); tg(dailySummaryText(t.day)); }
+  if (CFG.tgHealth && S.running){
+    const stalled = S.lastScan && now() - S.lastScan > 10 * 60000;
+    if (stalled && !stallWarned){ stallWarned = true; tg('⚠️ <b>Coin Scout hasn’t found new coins for 10 minutes.</b> It keeps trying on its own. Open the page to see what’s wrong.'); }
+    if (!stalled && stallWarned){ stallWarned = false; tg('✅ Coin Scout is finding new coins again.'); }
+    if (DEEP_OFF && S.lastDeepOffWarn !== DEEP_OFF){ S.lastDeepOffWarn = DEEP_OFF; tg('⚠️ <b>Helius stopped working:</b> ' + esc(DEEP_OFF)); }
   }
 }
 
@@ -1372,7 +1502,9 @@ function pause(){ S.running = false; save(); render(); feed('info', '', 'Paused.
 let BUSY = '';
 function setBusy(t){ BUSY = t; const b = $('#busy'); if (b) b.textContent = t; }
 function renderHealth(){
-  const name = {gt:'New coins', ds:'Prices', rc:'RugCheck', jup:'Jupiter', hel:'Helius'};
+  const name = {gt:'New coins', live:'Live feed', ds:'Prices', rc:'RugCheck', jup:'Jupiter', hel:'Helius', tg:'Telegram'};
+  if (!hasKey() || !CFG.liveFeed) delete name.live;
+  if (!hasSecret('tgToken')) delete name.tg;
   const st = h => h === 'hel' && !hasKey() ? 'off' : HEALTH[h] || '';
   $('#health').innerHTML = Object.keys(name).map(h => '<span title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : h === 'hel' && !HEALTH[h] ? 'Key saved. Turns green when the first coin reaches the deep check.' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
 }
@@ -1631,7 +1763,9 @@ function buildForm(vals){
     const id = 'f_' + f.k, v = vals[f.k];
     const lab = '<label for="' + id + '">' + esc(f.l) + (f.h ? '<span class="h">' + esc(f.h) + '</span>' : '') + '</label>';
     if (f.t === 'check') html += '<div class="f">' + lab + '<input type="checkbox" id="' + id + '"' + (v ? ' checked' : '') + '></div>';
-    else if (f.t === 'password') html += '<div class="f wide">' + lab + '<input type="password" id="' + id + '" value="' + esc(v) + '" autocomplete="off" spellcheck="false" placeholder="paste your key"></div>';
+    else if (f.t === 'password') html += '<div class="f wide">' + lab + '<input type="password" id="' + id + '" value="' + esc(v) + '" autocomplete="off" spellcheck="false" placeholder="paste it here"></div>';
+    else if (f.t === 'text') html += '<div class="f wide">' + lab + '<input type="text" id="' + id + '" value="' + esc(v) + '" autocomplete="off" spellcheck="false"></div>';
+    else if (f.t === 'button') html += '<div class="f"><span class="h" style="font-size:.85rem">' + esc(f.l) + '</span><button type="button" class="btn small" id="' + f.k + '">' + esc(f.b) + '</button></div>';
     else html += '<div class="f">' + lab + '<div class="in">' + (f.u === '$' ? '<span>$</span>' : '') + '<input type="number" step="any" min="0" id="' + id + '" value="' + esc(v) + '">' + (f.u && f.u !== '$' ? '<span>' + esc(f.u) + '</span>' : '') + '</div></div>';
   }
   $('#form').innerHTML = html + '</fieldset>';
@@ -1639,9 +1773,10 @@ function buildForm(vals){
 function readForm(){
   const out = {};
   for (const f of FIELDS){
+    if (f.skip) continue;
     const el = $('#f_' + f.k);
     if (f.t === 'check') out[f.k] = el.checked;
-    else if (f.t === 'password') out[f.k] = el.value.trim();
+    else if (f.t === 'password' || f.t === 'text') out[f.k] = el.value.trim();
     else { const n = parseFloat(el.value); out[f.k] = isFinite(n) && n >= 0 ? n : DEF[f.k]; }
   }
   return out;
@@ -1663,12 +1798,14 @@ function doCurve(on){
 }
 function doSettings(n){
   const old = CFG;
-  if (!n.heliusKey && old.heliusKey && n._keepKey) n.heliusKey = old.heliusKey;
+  for (const k of SECRETS) if (!n[k] && old[k] && n._keepKey) n[k] = old[k];
+  if (n.tgToken !== old.tgToken){ if (!n.tgChat || n.tgToken !== old.tgToken) n.tgChat = n.tgToken === old.tgToken ? n.tgChat : ''; tgFound = false; }
   delete n._keepKey;
   CFG = Object.assign({}, DEF, n); store.set('cfg', CFG);
   if (CFG.heliusKey !== old.heliusKey){ DEEP_OFF = ''; MODE = 'gtfa'; HEALTH.hel = null; }
   if (CFG.startCash !== old.startCash && !S.trades.length && !S.positions.length){ S.cash = S.start = +CFG.startCash; S.equity = [[now(), S.start]]; }
   save(); render();
+  if (!IS_REMOTE){ startLive(); tgConnect(); }
 }
 function doReset(){
   const running = S.running, keepBL = S.blacklist, keepStrikes = S.strikes;
@@ -1697,6 +1834,7 @@ function remoteCmd(c){
     case 'sell': doSell(c.value); break;
     case 'bladd': return doBlAdd(String(c.value || '')) ? 'ok' : 'exists';
     case 'blremove': doBlRemove(String(c.value || '')); break;
+    case 'tgtest': tgTest(); break;
     default: return 'unknown';
   }
   return 'ok';
@@ -1706,13 +1844,15 @@ function slim(){
   const s = Object.assign({}, S, {seen:{}, funderQueue:[], rcQueue:[], equity:S.equity.slice(-800)});
   s._waiting = all.filter(c => c.status === 'waiting' || c.status === 'new').length;
   s._after = afterStats(all);
-  return {S:s, CFG:Object.assign({}, CFG, {heliusKey:'', _hasKey:!!CFG.heliusKey}), BUSY, HEALTH, HEALTH_MSG, DEEP_OFF, serverTime:now()};
+  const cfg = Object.assign({}, CFG, {_has:{}});
+  for (const k of SECRETS){ cfg._has[k] = !!CFG[k]; cfg[k] = ''; }
+  return {S:s, CFG:cfg, BUSY, HEALTH, HEALTH_MSG, DEEP_OFF, serverTime:now()};
 }
 
 /* ---------------- settings dialog ---------------- */
 $('#setBtn').onclick = () => {
   buildForm(CFG);
-  if (IS_REMOTE && CFG._hasKey){ const f = $('#f_heliusKey'); if (f){ f.value = ''; f.placeholder = 'Key saved on the server. Leave blank to keep it.'; } }
+  if (IS_REMOTE) for (const k of SECRETS) if (hasSecret(k)){ const f = $('#f_' + k); if (f){ f.value = ''; f.placeholder = 'Saved on the server. Leave blank to keep it.'; } }
   resetArm = false; $('#resetBtn').textContent = 'Reset balance and journal'; $('#dlg').showModal();
 };
 function openKey(){
@@ -1721,6 +1861,7 @@ function openKey(){
   if (f){ f.scrollIntoView({block:'center'}); setTimeout(() => f.focus(), 50); }
 }
 $('#dlgX').onclick = () => $('#dlg').close();
+$('#form').addEventListener('click', e => { if (e.target && e.target.id === 'tgTestBtn'){ IS_REMOTE ? send('tgtest') : tgTest(); e.target.textContent = 'Sent, check Telegram'; } });
 $('#defBtn').onclick = () => buildForm(Object.assign({}, DEF, {heliusKey:IS_REMOTE ? '' : CFG.heliusKey}));
 $('#saveBtn').onclick = () => {
   const n = readForm();
@@ -1848,6 +1989,10 @@ if (IS_REMOTE){
   if (S.running){ feed('info', '', IS_ENGINE ? 'Server started. Picking up where it left off.' : 'Page reopened. Picking up where it left off.'); if (!IS_ENGINE && $('#wake').checked) setWake(true); }
   solPrice();
   worker();
+  startLive(); setInterval(startLive, 60000);
+  tgConnect(); setInterval(tgConnect, 20000);
+  setInterval(watchdog, 60000);
+  if (IS_ENGINE && S.running && CFG.tgHealth) setTimeout(() => tg('🔄 Coin Scout restarted on your server (after an update or a hiccup) and is running again.'), 5000);
   setInterval(() => { if (S.running) scanSources(); }, 30000);
   (async () => { for (;;){ try{ await monitor(); }catch(e){} await sleep(Math.max(3, +CFG.priceEvery || 5) * 1000); } })();
   setInterval(holderWatch, 30000);
