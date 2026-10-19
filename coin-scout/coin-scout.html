@@ -164,7 +164,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v9 · Oct 19</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v10 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -260,7 +260,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
 const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const hasKey = () => !!(CFG.heliusKey || CFG._hasKey);
-const VERSION = 'v9 · Oct 19';
+const VERSION = 'v10 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -539,6 +539,41 @@ function holderInfo(r){
   for (const x of list) owners[x.owner] = (owners[x.owner] || 0) + (+x.pct || 0);
   const minListed = (r.topHolders || []).length ? Math.min(...r.topHolders.map(x => +x.pct || 0)) : 0;
   return {top10, maxOne, creatorPct, lpLocked, owners, minListed, holders:r.totalHolders || 0};
+}
+let rcDownUntil = 0;
+/* RugCheck first; if it can't be reached, read the same basics straight from the blockchain with Helius */
+async function safetyReport(mint, m){
+  if (now() > rcDownUntil){
+    try{ const r = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + mint + '/report'); return {rep:r, src:'rc'}; }
+    catch(e){ rcDownUntil = now() + 3 * 60000; }
+  }
+  if (!CFG.heliusKey || DEEP_OFF) return {rep:undefined, src:'none'};
+  try{ return {rep:await heliusSafety(mint, m), src:'helius'}; }
+  catch(e){
+    if (e instanceof UserError){ DEEP_OFF = e.message; health('hel', 'err', e.message); renderBanners(); }
+    return {rep:undefined, src:'none'};
+  }
+}
+async function heliusSafety(mint, m){
+  const acc = await rpc('getAccountInfo', [mint, {encoding:'jsonParsed'}]);
+  const info = acc && acc.value && acc.value.data && acc.value.data.parsed && acc.value.data.parsed.info;
+  if (!info) return null;
+  const supply = +info.supply || 0, dec = +info.decimals;
+  const big = await rpc('getTokenLargestAccounts', [mint]);
+  const list = (big && big.value) || [];
+  const tas = list.map(x => x.address);
+  const tinfo = tas.length ? await rpc('getMultipleAccounts', [tas, {encoding:'jsonParsed'}]) : {value:[]};
+  const owners = ((tinfo && tinfo.value) || []).map(a => a && a.data && a.data.parsed && a.data.parsed.info && a.data.parsed.info.owner);
+  const uniq = [...new Set(owners.filter(Boolean))];
+  const oinfo = uniq.length ? await rpc('getMultipleAccounts', [uniq, {encoding:'base64', dataSlice:{offset:0, length:0}}]) : {value:[]};
+  const known = {};
+  ((oinfo && oinfo.value) || []).forEach((a, i) => { if (a && a.owner && a.owner !== SYS) known[uniq[i]] = {type:'AMM'}; });   // pools and programs, not people
+  if (m && m.pair) known[m.pair] = {type:'AMM'};
+  for (const k in KNOWN_SERVICES) known[k] = {type:'AMM'};
+  const tok = {supply, decimals:dec, mintAuthority:info.mintAuthority || null, freezeAuthority:info.freezeAuthority || null};
+  return {_source:'helius', mintAuthority:tok.mintAuthority, freezeAuthority:tok.freezeAuthority, token:tok,
+    topHolders:list.map((x, i) => ({address:x.address, owner:owners[i] || x.address, pct:supply ? 100 * (+x.amount) / supply : 0, insider:false})),
+    markets:m && m.pair ? [{pubkey:m.pair}] : [], knownAccounts:known, risks:[], rugged:false, graphInsidersDetected:0, creator:null, creatorBalance:0, totalHolders:0};
 }
 function rugEval(r, m){
   if (!r) return soft('RugCheck has no report yet');
@@ -1004,12 +1039,13 @@ async function buy(c, m, h, deep, dec, creator){
   const buyCost = Math.max(0, size - tokens * m.price);
   const bits = ['liquidity ' + usd(m.liq), 'market cap ' + usd(m.mcap), 'top 10 own ' + pctN(h.top10), m.buys1h + ' buys vs ' + m.sells1h + ' sells last hour'];
   if (m.curve) bits.push('still on the pump.fun curve');
+  if (h.src === 'helius') bits.push('safety checked on-chain with Helius (RugCheck was down)');
   bits.push(deep ? 'deep check clean (' + deep.checked + ' wallets, linked groups hold ' + pctN(deep.linkedPct) + ')' : 'no deep check');
   bits.push(quoted ? 'real Jupiter quote via ' + route : 'estimated fill (no Jupiter quote)');
   const p = {id:c.mint + ':' + now(), mint:c.mint, sym:m.sym || c.sym || short(c.mint), name:m.name, url:m.url, at:now(),
     cost:size, tokens, tokens0:tokens, entry:avg, spot0:m.price, liq0:m.liq, mcap0:m.mcap, price:m.price, liq:m.liq, mcap:m.mcap, peak:m.price,
     realized:0, costs:buyCost, tpHit:false, misses:0, holders0:h.owners, curve:!!m.curve, why:bits.join(' · '), hwAt:now(),
-    dec, dex:m.dex, route, quoted, impact, creator};
+    dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator};
   S.positions.push(p); S.stats.bought++;
   c.status = 'bought'; c.reason = 'Bought';
   feed('buy', p.sym, 'Bought ' + usd(size) + ' at ' + price(avg) + (quoted ? ' (real quote, via ' + route + ')' : ' (estimated)') + '. ' + bits.slice(0, 4).join(' · '), tagOf(p.mint));
@@ -1161,7 +1197,7 @@ async function holderWatch(){
     for (const p of [...S.positions]){
       if (!S.positions.includes(p) || now() - (p.hwAt || p.at) < 175000) continue;
       p.hwAt = now();
-      let r; try{ r = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + p.mint + '/report'); }catch(e){ continue; }
+      const r = (await safetyReport(p.mint, {pair:p.pair})).rep;
       if (!r || !S.positions.includes(p)) continue;
       if (r.rugged){ await closePos(p, 'RugCheck marked it as rugged'); continue; }
       const h = holderInfo(r);
@@ -1210,17 +1246,22 @@ async function processOne(c, m){
   if (!c.passedQuick){ c.passedQuick = true; S.stats.quick++; }
 
   setBusy('Safety check on ' + c.sym);
-  let rep;
-  try{ rep = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + c.mint + '/report'); }
-  catch(e){ setBusy(''); return verdict(c, later('RugCheck not reachable', '', 3)); }
+  const sr = await safetyReport(c.mint, m);
   setBusy('');
+  let rep = sr.rep;
+  if (rep === undefined) return verdict(c, later('Safety check unavailable', CFG.heliusKey ? 'RugCheck and Helius both unreachable' : 'RugCheck is down and no Helius key is set', 3));
+  if (sr.src === 'helius'){
+    if (!rep) return verdict(c, later('Safety check unavailable', 'coin not found on chain yet', 3));
+    /* without RugCheck we can't confirm a liquidity lock, except where it can't be pulled: pump.fun's curve and PumpSwap (liquidity is burned there) */
+    if (!(m.dex === 'pumpfun' || m.dex === 'pumpswap')) return verdict(c, later('Waiting for RugCheck', "can't confirm the liquidity lock on " + dexName(m.dex) + ' without it', 5));
+  }
   if (rep && rep.creator) c.creator = rep.creator;
   r = rugEval(rep, m);
   if (!r.ok){
     if (r.key === 'RugCheck says it already rugged' && c.creator) blRug(c.creator, c, 'RugCheck marked ' + (c.sym || 'their coin') + ' as rugged');
     return verdict(c, r);
   }
-  const h = r.h;
+  const h = r.h; h.src = sr.src;
   const bl = blHit([c.creator]);
   if (bl) return verdict(c, hard('Deployer is blacklisted', bl.why));
 
@@ -1328,6 +1369,7 @@ function renderBanners(){
   const out = [];
   if (DEEP_OFF) out.push('<div class="banner bad"><b>Deep check is off.</b> ' + esc(DEEP_OFF) + ' Coins are still checked with RugCheck. Fix the key, then reload the page.<button class="btn small" id="keyBtn">Fix Helius key</button></div>');
   else if (CFG.useDeep && !hasKey()) out.push('<div class="banner"><b>Deep check skipped:</b> add your Helius API key to run the Token Detective check before each buy. Everything else works without it.<button class="btn small" id="keyBtn">Add Helius key</button></div>');
+  if (HEALTH.rc === 'err') out.push('<div class="banner"><b>RugCheck is down right now.</b> ' + (hasKey() ? 'Safety checks are running straight from the blockchain with your Helius key instead (pump.fun and PumpSwap coins only, since their liquidity can’t be pulled).' : 'Add your Helius key so safety checks can keep running without it.') + '</div>');
   $('#banners').innerHTML = out.join('');
   const kb = $('#keyBtn'); if (kb) kb.onclick = openKey;
 }
