@@ -8,6 +8,8 @@ read -r -p "ALPACA_API_KEY: " A </dev/tty
 [ -z "$A" ] && { echo "Skipped. Run this later: bash /opt/coin-scout/server/gold-keys.sh"; exit 0; }
 read -r -p "ALPACA_SECRET_KEY: " B </dev/tty
 read -r -p "FRED_KEY: " C </dev/tty
+clean(){ local v="$1"; v="${v#*=}"; v="${v//\"/}"; v="${v//\'/}"; v="$(echo -n "$v" | tr -d '[:space:]')"; echo -n "$v"; }
+A="$(clean "$A")"; B="$(clean "$B")"; C="$(clean "$C")"
 printf 'ALPACA_API_KEY=%s\nALPACA_SECRET_KEY=%s\nFRED_KEY=%s\n' "$A" "$B" "$C" > "$ENVF"
 chmod 600 "$ENVF"
 echo "Saved. Testing it now..."
