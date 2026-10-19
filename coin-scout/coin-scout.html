@@ -270,7 +270,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v13 · Oct 19';
+const VERSION = 'v14 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -1192,7 +1192,7 @@ async function monitor(){
       p.misses = 0;
       if (p.curve && !m.curve){ p.curve = false; p.liq0 = m.liq; p.spot0 = m.price; }   // graduated from pump.fun while we held it
       p.price = m.price; if (m.liq != null) p.liq = m.liq; p.mcap = m.mcap; p.peak = Math.max(p.peak, m.price); p.checkedAt = now();
-      const ch = m.price / p.entry - 1, pk = p.peak / p.entry - 1, held = (now() - p.at) / 60000;
+      let ch = m.price / p.entry - 1; const pk = p.peak / p.entry - 1, held = (now() - p.at) / 60000;
       const stop = p.tpHit ? 0 : -CFG.stopLoss / 100;
       if (!p.curve && p.liq0 && p.spot0){
         const expected = p.liq0 * Math.sqrt(m.price / p.spot0);  // what the pool "should" be at this price
@@ -1201,6 +1201,17 @@ async function monitor(){
       if (CFG.tpUsd > 0){
         const prof = sellValue(p.tokens, p.price, p.liq) + p.realized - p.cost;
         if (prof >= CFG.tpUsd){ await closePos(p, 'quick-flip target hit at ' + pctS(ch)); continue; }
+      }
+      if (ch <= stop && p.dec != null && S.solUsd > 0){
+        /* price feeds can lag or glitch: confirm with a real Jupiter quote before selling */
+        const q = await sellNow(p, p.tokens);
+        if (q.quoted){
+          const real = (q.got + p.realized) / p.cost - 1;
+          if (real > stop){
+            if (!p.falseStop){ p.falseStop = true; feed('info', p.sym, 'Price feed showed ' + pctS(ch) + ' but a real sale would be ' + pctS(real) + '. Not selling yet.', tagOf(p.mint)); }
+            ch = real;
+          }
+        }
       }
       if (ch <= stop){ await closePos(p, p.tpHit ? 'fell back to the buy price after taking profit' : 'stop loss hit at ' + pctS(ch)); continue; }
       if (!p.tpHit && ch >= CFG.takeProfit / 100){
@@ -1277,8 +1288,10 @@ async function processOne(c, m){
   if (rep === undefined) return verdict(c, later('Safety check unavailable', CFG.heliusKey ? 'RugCheck and Helius both unreachable' : 'RugCheck is down and no Helius key is set', 3));
   if (sr.src === 'helius'){
     if (!rep) return verdict(c, later('Safety check unavailable', 'coin not found on chain yet', 3));
-    /* without RugCheck we can't confirm a liquidity lock, except where it can't be pulled: pump.fun's curve and PumpSwap (liquidity is burned there) */
+    /* without RugCheck we can't confirm a liquidity lock. Only real pump.fun coins (address ends in "pump") are safe:
+       their pool money is burned when they graduate. Anyone can open a PumpSwap pool for another coin and empty it later. */
     if (!(m.dex === 'pumpfun' || m.dex === 'pumpswap')) return verdict(c, later('Waiting for RugCheck', "can't confirm the liquidity lock on " + dexName(m.dex) + ' without it', 5));
+    if (!/pump$/.test(c.mint)) return verdict(c, later('Waiting for RugCheck', 'not a real pump.fun coin, so its pool money could be pulled', 5));
   }
   if (rep && rep.creator) c.creator = rep.creator;
   r = rugEval(rep, m);
@@ -1524,7 +1537,7 @@ function renderBanners(){
   const out = [];
   if (DEEP_OFF) out.push('<div class="banner bad"><b>Deep check is off.</b> ' + esc(DEEP_OFF) + ' Coins are still checked with RugCheck. Fix the key, then reload the page.<button class="btn small" id="keyBtn">Fix Helius key</button></div>');
   else if (CFG.useDeep && !hasKey()) out.push('<div class="banner"><b>Deep check skipped:</b> add your Helius API key to run the Token Detective check before each buy. Everything else works without it.<button class="btn small" id="keyBtn">Add Helius key</button></div>');
-  if (HEALTH.rc === 'err') out.push('<div class="banner"><b>RugCheck is down right now.</b> ' + (hasKey() ? 'Safety checks are running straight from the blockchain with your Helius key instead (pump.fun and PumpSwap coins only, since their liquidity can’t be pulled).' : 'Add your Helius key so safety checks can keep running without it.') + '</div>');
+  if (HEALTH.rc === 'err') out.push('<div class="banner"><b>RugCheck is down right now.</b> ' + (hasKey() ? 'Safety checks are running straight from the blockchain with your Helius key instead (real pump.fun coins only, since their pool money can’t be pulled).' : 'Add your Helius key so safety checks can keep running without it.') + '</div>');
   $('#banners').innerHTML = out.join('');
   const kb = $('#keyBtn'); if (kb) kb.onclick = openKey;
 }
