@@ -56,6 +56,8 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px
 .health span{margin-right:12px;white-space:nowrap}
 /* keep the status dots still: they sit first, and the changing text gets its own line */
 .statusline .health{order:-1}
+.health span[data-dot]{cursor:pointer}
+#dotMsg{order:3;flex:1 1 100%;font-size:.85rem;color:var(--ink);background:var(--soft);border-radius:8px;padding:6px 10px;margin-top:-6px;display:none}
 .statusline #runState{order:0}
 .statusline label{order:1}
 .statusline #busy{order:2;flex:1 1 100%;min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-8px}
@@ -169,7 +171,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v12 · Oct 19</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v13 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -178,6 +180,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
   <span id="runState"><span class="dot"></span>Paused</span>
   <span id="busy" class="busy"></span>
   <span class="health" id="health"></span>
+  <div id="dotMsg"></div>
   <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="wake"> Keep this Mac awake while running</label>
 </div>
 
@@ -267,7 +270,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v12 · Oct 19';
+const VERSION = 'v13 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -1506,7 +1509,7 @@ function renderHealth(){
   if (!hasKey() || !CFG.liveFeed) delete name.live;
   if (!hasSecret('tgToken')) delete name.tg;
   const st = h => h === 'hel' && !hasKey() ? 'off' : HEALTH[h] || '';
-  $('#health').innerHTML = Object.keys(name).map(h => '<span title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : h === 'hel' && !HEALTH[h] ? 'Key saved. Turns green when the first coin reaches the deep check.' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
+  $('#health').innerHTML = Object.keys(name).map(h => '<span data-dot="' + h + '" title="' + esc(HEALTH_MSG[h] || (st(h) === 'off' ? 'No key set' : h === 'hel' && !HEALTH[h] ? 'Key saved. Turns green when the first coin reaches the deep check.' : '')) + '"><span class="dot ' + st(h) + '"></span>' + name[h] + '</span>').join('');
 }
 function renderStatus(){
   const waiting = S._waiting != null ? S._waiting : Object.values(S.seen).filter(c => c.status === 'waiting' || c.status === 'new').length;
@@ -1798,6 +1801,8 @@ function doCurve(on){
 }
 function doSettings(n){
   const old = CFG;
+  if (n.tgToken) n.tgToken = n.tgToken.replace(/\s+/g, '').replace(/—/g, '--').replace(/–/g, '-');
+  if (n.heliusKey) n.heliusKey = n.heliusKey.replace(/\s+/g, '');
   for (const k of SECRETS) if (!n[k] && old[k] && n._keepKey) n[k] = old[k];
   if (n.tgToken !== old.tgToken){ if (!n.tgChat || n.tgToken !== old.tgToken) n.tgChat = n.tgToken === old.tgToken ? n.tgChat : ''; tgFound = false; }
   delete n._keepKey;
@@ -1861,6 +1866,13 @@ function openKey(){
   if (f){ f.scrollIntoView({block:'center'}); setTimeout(() => f.focus(), 50); }
 }
 $('#dlgX').onclick = () => $('#dlg').close();
+/* tap a status dot to see what it's saying (phones can't hover) */
+$('#health').addEventListener('click', e => {
+  const el = e.target.closest('[data-dot]'); if (!el) return;
+  const m = $('#dotMsg'), t = el.textContent + ': ' + (el.getAttribute('title') || (el.querySelector('.dot.ok') ? 'working' : 'no problems reported'));
+  if (m.style.display === 'block' && m.textContent === t){ m.style.display = 'none'; return; }
+  m.textContent = t; m.style.display = 'block';
+});
 $('#form').addEventListener('click', e => { if (e.target && e.target.id === 'tgTestBtn'){ IS_REMOTE ? send('tgtest') : tgTest(); e.target.textContent = 'Sent, check Telegram'; } });
 $('#defBtn').onclick = () => buildForm(Object.assign({}, DEF, {heliusKey:IS_REMOTE ? '' : CFG.heliusKey}));
 $('#saveBtn').onclick = () => {
