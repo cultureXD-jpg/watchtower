@@ -164,7 +164,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v8 · Oct 19</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v9 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -260,7 +260,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
 const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const hasKey = () => !!(CFG.heliusKey || CFG._hasKey);
-const VERSION = 'v8 · Oct 19';
+const VERSION = 'v9 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -400,7 +400,7 @@ async function getJSON(h, url){
       return j;
     }catch(e){
       clearTimeout(to);
-      last = e.name === 'AbortError' ? 'timed out' : (e.message || 'network error');
+      last = e.name === 'AbortError' ? 'timed out' : (e.message || 'network error') + (e.cause && (e.cause.code || e.cause.message) ? ' (' + (e.cause.code || e.cause.message) + ')' : '');
       await sleep(1500 * (a + 1));
     }
   }
@@ -1416,7 +1416,8 @@ function strike(creator, c){
 }
 /* crashed coins we never safety-checked: ask RugCheck who made them (a few per round) */
 async function rcStep(){
-  for (let i = 0; i < 15 && S.rcQueue.length; i++){
+  if (HEALTH.rc === 'err') return;
+  for (let i = 0; i < 5 && S.rcQueue.length; i++){
     const mint = S.rcQueue.shift(), c = S.seen[mint];
     if (!c) continue;
     let r; try{ r = await getJSON('rc', 'https://api.rugcheck.xyz/v1/tokens/' + mint + '/report'); }catch(e){ S.rcQueue.unshift(mint); break; }

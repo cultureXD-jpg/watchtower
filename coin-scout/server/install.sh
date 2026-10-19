@@ -25,7 +25,7 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=$APP/server
-ExecStart=/usr/bin/node --max-old-space-size=600 $APP/server/server.js
+ExecStart=/usr/bin/node --dns-result-order=ipv4first --max-old-space-size=600 $APP/server/server.js
 Restart=always
 RestartSec=5
 Environment=PORT=80

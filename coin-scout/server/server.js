@@ -6,6 +6,9 @@ const path = require('path');
 const http = require('http');
 const { execFile } = require('child_process');
 const { JSDOM, VirtualConsole } = require('jsdom');
+/* this server has no IPv6 address, so always connect over IPv4 (some sites offer IPv6 first and the connection just fails) */
+require('dns').setDefaultResultOrder('ipv4first');
+try{ require('net').setDefaultAutoSelectFamily(true); }catch(e){}
 
 const DIR = __dirname;
 const DATA = process.env.COINSCOUT_DATA || '/var/lib/coin-scout';
