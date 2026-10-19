@@ -164,7 +164,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 <div class="wrap">
 
 <header>
-  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v10 · Oct 19</span></div>
+  <div class="brand"><h1>Coin Scout</h1><span class="tag">Paper trading · fake money</span><span class="tag" title="Version">v11 · Oct 19</span></div>
   <button class="btn go" id="goBtn">Start scouting</button>
   <button class="btn" id="setBtn">Settings</button>
   <button class="btn" id="themeBtn" aria-label="Switch light or dark mode">Dark mode</button>
@@ -201,7 +201,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
     <li><b>Deep check</b> (your Token Detective, needs a Helius key): finds wallets secretly linked to each other or to the creator, and launch-block bundles.</li>
     <li>If a coin passes everything, it makes a <b>fake</b> buy priced with a real Jupiter quote (what you'd actually get, and which exchange it goes through), then watches it every few seconds and sells by your rules: either a quick flip at a set dollar profit, or letting winners run.</li>
     <li><b>Deployer blacklist:</b> when a coin rugs, the wallet that made it is blocked (and whoever funded that wallet). Deployers whose coins keep crashing get blocked too.</li>
-    <li>Coins that fail only because they're too new or too quiet get rechecked every 5 minutes for about 90 minutes.</li>
+    <li>Coins that fail only because they're too new or too quiet get rechecked every few minutes for about 90 minutes. The deep check runs in the background (one coin at a time, 2.5-minute limit) so scouting never pauses.</li>
     <li>Leave this tab open in its own window (not minimized). Browsers slow down hidden tabs, and nothing runs while the page is closed.</li>
   </ol>
 </details>
@@ -260,7 +260,7 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 const IS_ENGINE = !!window.__COINSCOUT_ENGINE__;
 const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const hasKey = () => !!(CFG.heliusKey || CFG._hasKey);
-const VERSION = 'v10 · Oct 19';
+const VERSION = 'v11 · Oct 19';
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
    No wallet, no real money. Deep check is a trimmed copy of Token Detective.
@@ -555,17 +555,17 @@ async function safetyReport(mint, m){
   }
 }
 async function heliusSafety(mint, m){
-  const acc = await rpc('getAccountInfo', [mint, {encoding:'jsonParsed'}]);
+  const acc = await rpc('getAccountInfo', [mint, {encoding:'jsonParsed'}], true);
   const info = acc && acc.value && acc.value.data && acc.value.data.parsed && acc.value.data.parsed.info;
   if (!info) return null;
   const supply = +info.supply || 0, dec = +info.decimals;
-  const big = await rpc('getTokenLargestAccounts', [mint]);
+  const big = await rpc('getTokenLargestAccounts', [mint], true);
   const list = (big && big.value) || [];
   const tas = list.map(x => x.address);
-  const tinfo = tas.length ? await rpc('getMultipleAccounts', [tas, {encoding:'jsonParsed'}]) : {value:[]};
+  const tinfo = tas.length ? await rpc('getMultipleAccounts', [tas, {encoding:'jsonParsed'}], true) : {value:[]};
   const owners = ((tinfo && tinfo.value) || []).map(a => a && a.data && a.data.parsed && a.data.parsed.info && a.data.parsed.info.owner);
   const uniq = [...new Set(owners.filter(Boolean))];
-  const oinfo = uniq.length ? await rpc('getMultipleAccounts', [uniq, {encoding:'base64', dataSlice:{offset:0, length:0}}]) : {value:[]};
+  const oinfo = uniq.length ? await rpc('getMultipleAccounts', [uniq, {encoding:'base64', dataSlice:{offset:0, length:0}}], true) : {value:[]};
   const known = {};
   ((oinfo && oinfo.value) || []).forEach((a, i) => { if (a && a.owner && a.owner !== SYS) known[uniq[i]] = {type:'AMM'}; });   // pools and programs, not people
   if (m && m.pair) known[m.pair] = {type:'AMM'};
@@ -598,7 +598,10 @@ function rugEval(r, m){
 /* =====================================================================
    DEEP CHECK — trimmed copy of Token Detective's investigation
    ===================================================================== */
-const DC = {LAUNCH_TXS:200, EARLY_PICK:15, HOLDER_PICK:12, MAX_WALLETS:40, MAX_HOPS:1, WALLET_PAGES:1, EXCHANGE_FANOUT:25, LAUNCH_SIG_PAGES:12, FALLBACK_TX_CAP:150, HOLDER_PAGES:2};
+const DC = {LAUNCH_TXS:200, EARLY_PICK:10, HOLDER_PICK:10, MAX_WALLETS:28, MAX_HOPS:1, WALLET_PAGES:1, EXCHANGE_FANOUT:25, LAUNCH_SIG_PAGES:12, FALLBACK_TX_CAP:60, HOLDER_PAGES:2, TIME_LIMIT:150000};
+/* only one deep check at a time, in the background; `abort` stops it at the time limit */
+const DEEP = {running:null, abort:false};
+class TooSlow extends Error {}
 let MINT = '', MODE = 'gtfa', CALLS = 0, DEC = 6, SUPPLY = 1, DEEP_OFF = '';
 const MARKET = new Map(), TA = new Map(), TXS = new Map();
 
@@ -635,13 +638,15 @@ async function post(body){
   }
   throw new Error('Helius kept asking us to slow down: ' + lastMsg);
 }
-async function rpc(method, params){
+async function rpc(method, params, free){
+  if (!free && DEEP.abort) throw new TooSlow('time limit');
   const j = await post({jsonrpc:'2.0', id:1, method, params});
   if (j.error){ const e = new Error(j.error.message || 'Helius error'); e.code = j.error.code; throw e; }
   return j.result;
 }
 async function rpcBatch(calls){
   if (!calls.length) return [];
+  if (DEEP.abort) throw new TooSlow('time limit');
   const out = [];
   for (let i = 0; i < calls.length; i += 5){
     const chunk = calls.slice(i, i + 5);
@@ -799,7 +804,7 @@ async function deepCheck(mint, rep, sym){
 
   say('reading the token');
   let asset = null;
-  try{ asset = await rpc('getAsset', {id:mint}); }catch(e){ if (e instanceof UserError) throw e; }
+  try{ asset = await rpc('getAsset', {id:mint}); }catch(e){ if (e instanceof UserError || e instanceof TooSlow) throw e; }
   const ti = (asset && asset.token_info) || {};
   if (ti.decimals == null){
     const s = await rpc('getTokenSupply', [mint]);
@@ -841,7 +846,7 @@ async function deepCheck(mint, rep, sym){
       }
       if (list.length < 1000) break;
     }
-  }catch(e){ if (e instanceof UserError) throw e; }
+  }catch(e){ if (e instanceof UserError || e instanceof TooSlow) throw e; }
   await resolveMarkets([...holders.keys()]);
 
   const roles = new Map(); const addRole = (w, r) => { if (!roles.has(w)) roles.set(w, new Set()); roles.get(w).add(r); };
@@ -904,7 +909,7 @@ async function deepCheck(mint, rep, sym){
   for (const [f, n] of fCount){
     if (n < 2 || isMarket(f) || events.has(f)) continue;
     if (++looked > 15) break;
-    const r = await rpc('getSignaturesForAddress', [f, {limit:1000}]).catch(e => { if (e instanceof UserError) throw e; return []; });
+    const r = await rpc('getSignaturesForAddress', [f, {limit:1000}]).catch(e => { if (e instanceof UserError || e instanceof TooSlow) throw e; return []; });
     if (r.length >= 1000 && ((r[0].blockTime || 0) - (r[r.length - 1].blockTime || 0)) < 7 * 86400) exchangeFunders.add(f);
   }
 
@@ -1228,7 +1233,7 @@ function verdict(c, r){
     return;
   }
   c.status = 'waiting'; c.next = now() + (r.mins || 5) * 60000;
-  if (SHOW_ALL && !c.lastLogged){ c.lastLogged = r.key; feed('wait', c.sym || short(c.mint), 'Watching: ' + r.key + (r.detail ? ' (' + r.detail + ')' : '') + '. Rechecks every 5 min, quietly.', tagOf(c.mint)); }
+  if (SHOW_ALL && !c.lastLogged){ c.lastLogged = r.key; feed('wait', c.sym || short(c.mint), 'Watching: ' + r.key + (r.detail ? ' (' + r.detail + ')' : '') + '. Will keep checking it quietly.', tagOf(c.mint)); }
 }
 const later = (key, detail, mins) => ({ok:false, hard:false, key, detail:detail || '', mins});
 
@@ -1271,15 +1276,10 @@ async function processOne(c, m){
     else {
       S.deepTimes = (S.deepTimes || []).filter(t => now() - t < 3600e3);
       if (S.deepTimes.length >= CFG.deepPerHour) return verdict(c, later('Waiting for a deep-check slot', 'hourly limit reached', 5));
-      S.deepTimes.push(now());
-      feed('info', c.sym, 'Passed quick and safety checks. Running the deep check…', tagOf(c.mint));
-      try{ deep = await deepCheck(c.mint, rep, c.sym); }
-      catch(e){
-        if (e instanceof UserError){ DEEP_OFF = e.message; health('hel', 'err', e.message); feed('error', '', 'Deep check turned off: ' + e.message); renderBanners(); deep = null; }
-        else deep = {ok:false, why:e.message};
-      }
-      setBusy('');
-      if (deep){ c.deep = {at:now(), res:deep}; S.stats.deep++; }
+      if (DEEP.running === c.mint) return verdict(c, later('Deep check running', '', 3));
+      if (DEEP.running) return verdict(c, later('Waiting for a deep-check slot', 'another coin is being checked', 1));
+      startDeep(c, rep);   // runs in the background; scouting carries on
+      return verdict(c, later('Deep check running', '', 3));
     }
     if (deep){
       if (!deep.ok) return verdict(c, hard("Deep check couldn't finish", deep.why));
@@ -1304,6 +1304,26 @@ async function processOne(c, m){
   r = quick(fm);
   if (!r.ok) return verdict(c, r);
   await buy(c, fm, h, deep, rep && rep.token && rep.token.decimals != null ? +rep.token.decimals : null, c.creator || (deep && deep.creator) || null);
+}
+
+/* deep check in the background: when it finishes, the coin is looked at again right away with fresh prices */
+async function startDeep(c, rep){
+  DEEP.running = c.mint; DEEP.abort = false;
+  S.deepTimes.push(now());
+  feed('info', c.sym, 'Passed quick and safety checks. Deep check running in the background…', tagOf(c.mint));
+  const timer = setTimeout(() => { DEEP.abort = true; }, DC.TIME_LIMIT);
+  let res = null;
+  try{ res = await deepCheck(c.mint, rep, c.sym); }
+  catch(e){
+    if (e instanceof UserError){ DEEP_OFF = e.message; health('hel', 'err', e.message); feed('error', '', 'Deep check turned off: ' + e.message); renderBanners(); }
+    else if (e instanceof TooSlow) res = {ok:false, slow:true, why:'took over ' + Math.round(DC.TIME_LIMIT / 1000) + ' seconds (Helius was slow)'};
+    else res = {ok:false, why:e.message};
+  } finally {
+    clearTimeout(timer); DEEP.running = null; DEEP.abort = false; setBusy('');
+  }
+  if (res){ c.deep = {at:now(), res}; S.stats.deep++; }
+  if (c.status === 'waiting') c.next = now();
+  save();
 }
 
 let SHOW_ALL = false;
@@ -1471,6 +1491,7 @@ async function rcStep(){
 }
 /* who paid for a blacklisted deployer's wallet? (skips exchanges and programs) */
 async function funderStep(){
+  if (DEEP.running) return;
   const item = S.funderQueue.shift();
   if (!item || !CFG.heliusKey || DEEP_OFF) return;
   try{
