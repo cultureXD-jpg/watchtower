@@ -154,6 +154,27 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 .f.wide{grid-template-columns:1fr}
 .f input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);justify-self:end}
 
+
+/* live pipeline */
+.flow{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:22px 16px 14px}
+.flow .track{position:absolute;left:calc(100%/12);right:calc(100%/12);top:47px;height:2px;background:var(--line);border-radius:2px}
+.flow .node{position:relative;z-index:1;text-align:center;min-width:0}
+.flow .ring{width:50px;height:50px;margin:0 auto 8px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;font-size:1.25rem;transition:border-color .3s,box-shadow .3s}
+.flow .node.on .ring{border-color:var(--accent);box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent);animation:ring 1.6s infinite}
+.flow .node.win .ring{border-color:var(--up)}
+@keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 12px transparent}}
+.flow .lbl{font-weight:600;font-size:.86rem}
+.flow .big{font-family:var(--mono);font-size:1.05rem;margin-top:2px}
+.flow .sub{color:var(--muted);font-size:.76rem;line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+.flow .now{color:var(--accent);font-size:.76rem;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flow .coin{position:absolute;top:41px;z-index:2;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--muted);border:2px solid var(--surface);pointer-events:none}
+.flow .coin.buy{background:var(--accent)} .flow .coin.win{background:var(--up)} .flow .coin.loss{background:var(--down)}
+.recent{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 14px;font-size:.78rem}
+.recent span{border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent b{color:var(--ink);font-weight:600}
+.recent .buy b{color:var(--accent)} .recent .win b{color:var(--up)} .recent .loss b{color:var(--down)}
+@media (max-width:720px){.flow{grid-template-columns:repeat(3,1fr);row-gap:18px}.flow .track,.flow .coin{display:none}}
+@media (prefers-reduced-motion:reduce){.flow .node.on .ring{animation:none}.flow .coin{display:none}}
 @media (max-width:900px){
   .stats{grid-template-columns:repeat(2,1fr)}
   .stat:last-child{grid-column:span 2}
@@ -215,6 +236,12 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 </details>
 
 <section class="panel">
+  <div class="hd"><h2>Live view</h2><span class="muted" id="flowNote" style="font-size:.85rem"></span></div>
+  <div class="flow" id="flow"></div>
+  <div class="recent" id="recent"></div>
+</section>
+
+<section class="panel">
   <div class="hd"><h2>Open trades</h2><span class="muted" id="openNote"></span></div>
   <div class="bd tablewrap" id="open"></div>
 </section>
@@ -270,7 +297,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v15 · Oct 19';
+const VERSION = 'v16 · Oct 19';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1778,7 +1805,89 @@ function renderStrat(){
   ];
   $('#strat').innerHTML = tiles.map(([k, v, s2]) => '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s2 + '</div></div>').join('');
 }
-function render(){ renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
+
+/* =====================================================================
+   Live view: coins moving through each step
+   ===================================================================== */
+const STAGES = [
+  {k:'found', l:'Found', i:'🔎'}, {k:'quick', l:'Quick checks', i:'⚡'}, {k:'safety', l:'Safety check', i:'🛡️'},
+  {k:'deep', l:'Deep check', i:'🕵️'}, {k:'trade', l:'Trading', i:'💹'}, {k:'sold', l:'Sold', i:'🏁'}
+];
+const SAFETY_RE = /RugCheck|wallet|Top 10|Creator|print more|freeze|blacklist|Safety check/i;
+const DEEP_RE = /Deep check|Bundled|Linked|deep-check/i;
+function stageOfReason(r){ return DEEP_RE.test(r) ? 3 : SAFETY_RE.test(r) ? 2 : 1; }
+/* which step a feed line shows a coin reaching, and how it ended there */
+function flowEvent(l){
+  if (l.kind === 'buy') return {st:4, cls:'buy', what:'bought'};
+  if (l.kind === 'win') return {st:5, cls:'win', what:'sold for a profit'};
+  if (l.kind === 'loss') return {st:5, cls:'loss', what:'sold at a loss'};
+  if (l.kind === 'info' && /Deep check running/.test(l.text)) return {st:3, cls:'buy', what:'deep check'};
+  const m = /^Skipped: ([^(]+)/.exec(l.text || '');
+  if (m && (l.kind === 'reject' || l.kind === 'wait')){ const st = stageOfReason(m[1]); return {st, cls:'', what:'stopped: ' + m[1].trim().toLowerCase()}; }
+  return null;
+}
+const flowSeen = new Set(); let flowBuilt = false, flowFirst = true;
+function renderFlow(){
+  if (IS_ENGINE) return;
+  const el = $('#flow'); if (!el) return;
+  if (!flowBuilt){
+    el.innerHTML = '<div class="track"></div>' + STAGES.map((s, i) => '<div class="node" id="fn' + i + '"><div class="ring">' + s.i + '</div><div class="lbl">' + s.l + '</div><div class="big"></div><div class="sub"></div><div class="now"></div></div>').join('');
+    flowBuilt = true;
+  }
+  const st = S.stats || {}, rj = S.rejects || {};
+  const blocked = [0, 0, 0, 0];
+  let topQuick = '', topQuickN = 0;
+  for (const [r, n] of Object.entries(rj)){
+    if (/^Waiting|unavailable|not reachable|no report yet|slot/i.test(r)) continue;
+    const s = stageOfReason(r); blocked[s] += n;
+    if (s === 1 && n > topQuickN){ topQuickN = n; topQuick = r; }
+  }
+  const tr = S.trades || [], wins = tr.filter(t => t.pnl > 0).length, pos = S.positions || [];
+  const waiting = S._waiting != null ? S._waiting : Object.values(S.seen || {}).filter(c => c.status === 'waiting' || c.status === 'new').length;
+  const busy = BUSY || '';
+  const deepSym = S._deepSym || (DEEP.running && S.seen[DEEP.running] ? S.seen[DEEP.running].sym : '');
+  const safetySym = /^Safety check on (.+)/.exec(busy);
+  const data = [
+    [st.seen || 0, 'watching ' + waiting, S.running ? 'scanning for new coins' : '', S.running],
+    [st.quick || 0, 'passed' + (topQuick ? ' · most fail: ' + topQuick.toLowerCase() : ''), '', S.running && !safetySym && !deepSym],
+    [blocked[2], 'blocked as unsafe', safetySym ? 'checking ' + safetySym[1] : '', !!safetySym],
+    [st.deep || 0, 'checked · ' + blocked[3] + ' blocked', deepSym ? 'checking ' + deepSym : '', !!deepSym],
+    [st.bought || tr.length + pos.length, 'bought · ' + pos.length + ' open now', pos.length ? pos.map(p => p.sym).slice(0, 3).join(', ') : '', pos.length > 0],
+    [wins + ' / ' + (tr.length - wins), 'won / lost', '', false]
+  ];
+  data.forEach(([big, sub, nowTxt, on], i) => {
+    const n = $('#fn' + i);
+    n.classList.toggle('on', !!on && S.running);
+    n.querySelector('.big').textContent = typeof big === 'number' ? big.toLocaleString() : big;
+    n.querySelector('.sub').textContent = sub; n.querySelector('.sub').title = sub;
+    n.querySelector('.now').textContent = nowTxt;
+  });
+  $('#flowNote').textContent = S.running ? 'updates every few seconds' : 'paused';
+
+  /* recent coins: dots run along the track to the step where they stopped */
+  const evs = [];
+  for (const l of (S.log || []).slice(0, 80)){ const e = flowEvent(l); if (e) evs.push(Object.assign(e, {l})); }
+  $('#recent').innerHTML = evs.slice(0, 8).map(e => '<span class="' + e.cls + '"><b>' + esc(e.l.sym || '?') + '</b> ' + esc(e.what) + ' · ' + clock(e.l.t) + '</span>').join('') || '<span>No coins have reached the checks yet.</span>';
+  const fresh = [];
+  for (const e of evs){
+    const key = e.l.t + '|' + e.l.sym + '|' + e.l.kind;
+    if (flowSeen.has(key)) continue;
+    flowSeen.add(key);
+    if (!flowFirst || now() - e.l.t < 90e3) fresh.push(e);
+  }
+  flowFirst = false;
+  fresh.reverse().slice(-6).forEach((e, k) => setTimeout(() => flowDot(el, e), k * 700));
+}
+function flowDot(el, e){
+  if (!el.animate || getComputedStyle(el.querySelector('.track')).display === 'none') return;
+  const d = document.createElement('div'); d.className = 'coin ' + e.cls; d.title = (e.l.sym || '') + ' ' + e.what;
+  el.appendChild(d);
+  const pos = i => ((i + 0.5) / 6 * 100) + '%';
+  const dur = 900 + e.st * 650;
+  const a = d.animate([{left:pos(0), opacity:0}, {left:pos(0), opacity:1, offset:.06}, {left:pos(e.st), opacity:1, offset:.75}, {left:pos(e.st), opacity:0}], {duration:dur + 1400, easing:'ease-in-out', fill:'forwards'});
+  a.onfinish = () => d.remove();
+}
+function render(){ renderFlow(); renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
 
 /* ---------------- settings dialog ---------------- */
 function buildForm(vals){
@@ -1871,6 +1980,7 @@ function slim(){
   const s = Object.assign({}, S, {seen:{}, funderQueue:[], rcQueue:[], equity:S.equity.slice(-800)});
   s._waiting = all.filter(c => c.status === 'waiting' || c.status === 'new').length;
   s._after = afterStats(all);
+  s._deepSym = DEEP.running && S.seen[DEEP.running] ? S.seen[DEEP.running].sym : '';
   const cfg = Object.assign({}, CFG, {_has:{}});
   for (const k of SECRETS){ cfg._has[k] = !!CFG[k]; cfg[k] = ''; }
   return {S:s, CFG:cfg, BUSY, HEALTH, HEALTH_MSG, DEEP_OFF, serverTime:now()};
