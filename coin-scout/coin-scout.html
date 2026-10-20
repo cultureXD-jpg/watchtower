@@ -297,7 +297,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v16 · Oct 19';
+const VERSION = 'v17 · Oct 19';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1717,8 +1717,11 @@ let tracking = false;
 async function trackSkipped(){
   if (tracking) return; tracking = true;
   try{
-    const list = Object.values(S.seen).filter(c => c.p0 && c.status !== 'bought' && now() - c.t0 < 2 * 3600e3)
-      .sort((a, b) => b.t0 - a.t0).slice(0, 150);
+    /* follow every coin that passed the quick checks, plus a fixed 1-in-8 sample of the rest, for the full 2 hours
+       (before, only the 150 newest were followed, so each coin dropped out after a few minutes) */
+    const pick = c => c.passedQuick || [...c.mint].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 9973, 7) % 8 === 0;
+    const list = Object.values(S.seen).filter(c => c.p0 && c.status !== 'bought' && now() - c.t0 < 2 * 3600e3 && pick(c))
+      .sort((a, b) => b.t0 - a.t0).slice(0, 300);
     if (!list.length) return;
     let mm; try{ mm = await dsPairs(list.map(c => c.mint)); }catch(e){ return; }
     for (const c of list){
