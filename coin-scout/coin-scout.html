@@ -270,7 +270,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v14 · Oct 19';
+const VERSION = 'v15 · Oct 19';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -308,7 +308,7 @@ const FIELDS = [
   {k:'dumpExit', l:'Sell if big holders start dumping', t:'check', d:true, h:'Rechecks the biggest wallets every 3 minutes.'},
   {g:'Which coins to look at', k:'minAgeMin', l:'Coin must be at least', u:'min old', d:10},
   {k:'maxAgeHr', l:'Ignore coins older than', u:'hours', d:24},
-  {k:'minLiq', l:'Minimum liquidity', u:'$', d:15000},
+  {k:'minLiq', l:'Minimum liquidity', u:'$', d:25000},
   {k:'minMcap', l:'Minimum market cap', u:'$', d:30000},
   {k:'maxMcap', l:'Maximum market cap', u:'$', d:3000000},
   {k:'minVol1h', l:'Minimum trading in the last hour', u:'$', d:15000},
@@ -347,6 +347,8 @@ const PRESETS = {
   run:{tpUsd:0, stopLoss:35, halfAtTP:true, trailStart:40, trail:25, maxHoldMin:360, maxOpen:5, minAgeMin:10}
 };
 let CFG = Object.assign({}, DEF, store.get('cfg') || {});
+/* v15: trades in pools under $25K lost 8 of 9 times, so raise the old $15K minimum once (a later change in Settings is kept) */
+if (!CFG._v15liq){ if (!(+CFG.minLiq >= 25000)) CFG.minLiq = 25000; CFG._v15liq = true; if (!IS_REMOTE) store.set('cfg', CFG); }
 
 /* ---------------- state ---------------- */
 function fresh(){
@@ -1201,7 +1203,13 @@ async function monitor(){
       }
       if (CFG.tpUsd > 0){
         const prof = sellValue(p.tokens, p.price, p.liq) + p.realized - p.cost;
-        if (prof >= CFG.tpUsd){ await closePos(p, 'quick-flip target hit at ' + pctS(ch)); continue; }
+        if (prof >= CFG.tpUsd){
+          /* confirm with a real Jupiter quote: the price feed can show a jump that a real sale wouldn't get */
+          let realProf = prof;
+          if (p.dec != null && S.solUsd > 0){ const q = await sellNow(p, p.tokens); if (q.quoted) realProf = q.got + p.realized - p.cost; }
+          if (realProf >= CFG.tpUsd){ await closePos(p, 'quick-flip target hit at ' + pctS(ch)); continue; }
+          if (!p.falseTp){ p.falseTp = true; feed('info', p.sym, 'Price feed showed +' + usd(prof) + ' profit but a real sale would be ' + money(realProf) + '. Not selling yet.', tagOf(p.mint)); }
+        }
       }
       if (ch <= stop && p.dec != null && S.solUsd > 0){
         /* price feeds can lag or glitch: confirm with a real Jupiter quote before selling */
@@ -1820,7 +1828,7 @@ function doSettings(n){
   for (const k of SECRETS) if (!n[k] && old[k] && n._keepKey) n[k] = old[k];
   if (n.tgToken !== old.tgToken){ if (!n.tgChat || n.tgToken !== old.tgToken) n.tgChat = n.tgToken === old.tgToken ? n.tgChat : ''; tgFound = false; }
   delete n._keepKey;
-  CFG = Object.assign({}, DEF, n); store.set('cfg', CFG);
+  CFG = Object.assign({}, DEF, n, {_v15liq:true}); store.set('cfg', CFG);
   if (CFG.heliusKey !== old.heliusKey){ DEEP_OFF = ''; MODE = 'gtfa'; HEALTH.hel = null; }
   if (CFG.startCash !== old.startCash && !S.trades.length && !S.positions.length){ S.cash = S.start = +CFG.startCash; S.equity = [[now(), S.start]]; }
   save(); render();
