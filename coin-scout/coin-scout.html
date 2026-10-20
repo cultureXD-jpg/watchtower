@@ -263,6 +263,11 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 </section>
 
 <section class="panel">
+  <div class="hd"><h2>Smart wallets (learning)</h2><span class="muted" id="studyNote" style="font-size:.85rem"></span></div>
+  <div id="study"></div>
+</section>
+
+<section class="panel">
   <div class="hd"><h2>Deployer blacklist</h2><span class="muted" id="blNote"></span></div>
   <div class="bladd"><input type="text" id="blInput" placeholder="Paste a wallet address to block it" spellcheck="false" autocomplete="off"><button class="btn small" id="blBtn">Add to blacklist</button></div>
   <div class="bd tablewrap" id="blist"></div>
@@ -297,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v17 · Oct 19';
+const VERSION = 'v18 · Oct 19';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -383,7 +388,7 @@ function fresh(){
     equity:[[now(), +CFG.startCash]], stats:{seen:0, quick:0, deep:0, bought:0}, deepTimes:[], running:false, lastScan:0, solUsd:150};
 }
 let S = Object.assign(fresh(), store.get('state') || {});
-S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
+S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.study = S.study || {queue:[], done:{}, wallets:{}, hits:[], runners:0, flops:0, times:[]}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
 let saveT = null, saveWarned = false;
 function save(){
   clearTimeout(saveT);
@@ -843,6 +848,7 @@ async function runPool(n, queue, fn){
   if (err) throw err;
 }
 
+let LAST_EARLY = null;
 async function deepCheck(mint, rep, sym){
   MINT = mint; MARKET.clear(); TA.clear(); TXS.clear();
   for (const k in KNOWN_SERVICES) MARKET.set(k, true);
@@ -879,6 +885,7 @@ async function deepCheck(mint, rep, sym){
     }
   }
 
+  LAST_EARLY = {mint, wallets:[...early.entries()].sort((a, b) => a[1].slot - b[1].slot).map(x => x[0]).filter(w => w !== creator).slice(0, 40)};
   say('checking the biggest holders');
   const holders = new Map();
   try{
@@ -1391,6 +1398,7 @@ async function startDeep(c, rep){
     clearTimeout(timer); DEEP.running = null; DEEP.abort = false; setBusy('');
   }
   if (res){ c.deep = {at:now(), res}; S.stats.deep++; }
+  if (LAST_EARLY && LAST_EARLY.mint === c.mint) smartMatch(c, LAST_EARLY.wallets);
   if (c.status === 'waiting') c.next = now();
   save();
 }
@@ -1650,6 +1658,7 @@ function blRug(creator, c, why){
 }
 function crashed(c){
   c.struck = true;
+  studyAdd(c, 'flop');
   if (!CFG.blAuto) return;
   if (c.creator) strike(c.creator, c);
   else if (S.rcQueue.length < 200) S.rcQueue.push(c.mint);
@@ -1729,6 +1738,8 @@ async function trackSkipped(){
       if (!m || !m.price){ c.gone = (c.gone || 0) + 1; if (c.gone >= 3 && !c.struck) crashed(c); continue; }
       const r = m.price / c.p0;
       c.hi = Math.max(c.hi || 1, r); c.lo = Math.min(c.lo || 1, r); c.last = r; c.lastAt = now();
+      if (c.hi >= STUDY.RUNNER) studyAdd(c, 'runner');
+      const hit = c.smart && S.study.hits.find(h => h.mint === c.mint); if (hit){ hit.hi = c.hi; hit.last = r; }
       if (r <= 0.1 && !c.struck) crashed(c);
     }
     await rcStep();
@@ -1890,7 +1901,107 @@ function flowDot(el, e){
   const a = d.animate([{left:pos(0), opacity:0}, {left:pos(0), opacity:1, offset:.06}, {left:pos(e.st), opacity:1, offset:.75}, {left:pos(e.st), opacity:0}], {duration:dur + 1400, easing:'ease-in-out', fill:'forwards'});
   a.onfinish = () => d.remove();
 }
-function render(){ renderFlow(); renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
+
+/* =====================================================================
+   Smart wallets (learning, watch-only)
+   When a coin it is following jumps 3x+, it looks up who bought first.
+   It does the same for coins that crashed, so wallets that buy everything early
+   (sniper bots) don't look smart. Wallets early on several winners and few flops rise to the top.
+   ===================================================================== */
+const STUDY = {RUNNER:3, PER_HOUR:20, BUYERS:30, TIME_LIMIT:60000, MAX_WALLETS:6000};
+function studyAdd(c, kind){
+  const st = S.study;
+  if (c.studied || st.done[c.mint] || st.queue.some(q => q.mint === c.mint)) return;
+  if (kind === 'flop'){
+    if (!c.passedQuick) return;                         // compare against coins that looked tradeable
+    if (st.flops + st.queue.filter(q => q.kind === 'flop').length > st.runners + st.queue.filter(q => q.kind === 'runner').length + 3) return;  // keep it balanced
+  }
+  c.studied = true;
+  st.queue.push({mint:c.mint, sym:c.sym || short(c.mint), kind, hi:c.hi || 1, at:now()});
+  if (st.queue.length > 60) st.queue = st.queue.filter(q => q.kind === 'runner').concat(st.queue.filter(q => q.kind === 'flop')).slice(0, 60);
+}
+async function earlyBuyers(mint){
+  MINT = mint; MARKET.clear(); TA.clear(); TXS.clear();
+  for (const k in KNOWN_SERVICES) MARKET.set(k, true);
+  const first = (await launchTxs()).map(norm).filter(Boolean).sort((a, b) => a.slot - b.slot);
+  if (!first.length) return null;
+  const creator = first[0].payer;
+  await resolveMarkets(first.flatMap(t => Object.keys(t.tok)));
+  const out = [];
+  for (const t of first){
+    if (!Object.entries(t.tok).some(([o, d]) => d < 0 && isMarket(o))) continue;
+    for (const [o, d] of Object.entries(t.tok)) if (d > 0 && !isMarket(o) && o !== creator && !out.includes(o)) out.push(o);
+    if (out.length >= STUDY.BUYERS) break;
+  }
+  return {creator, buyers:out.slice(0, STUDY.BUYERS)};
+}
+let studying = false;
+async function studyStep(){
+  const st = S.study;
+  if (studying || DEEP.running || !CFG.heliusKey || DEEP_OFF || !st.queue.length) return;
+  st.times = (st.times || []).filter(t => now() - t < 3600e3);
+  if (st.times.length >= STUDY.PER_HOUR) return;
+  st.queue.sort((a, b) => (a.kind === 'runner' ? 0 : 1) - (b.kind === 'runner' ? 0 : 1));
+  const q = st.queue.shift(); if (!q) return;
+  studying = true; DEEP.running = 'study'; DEEP.abort = false; st.times.push(now());
+  const timer = setTimeout(() => { DEEP.abort = true; }, STUDY.TIME_LIMIT);
+  let res = null, why = '';
+  try{ res = await earlyBuyers(q.mint); }
+  catch(e){ why = e.message || 'failed'; if (e instanceof UserError){ DEEP_OFF = e.message; health('hel', 'err', e.message); renderBanners(); } }
+  finally { clearTimeout(timer); DEEP.running = null; DEEP.abort = false; studying = false; }
+  st.done[q.mint] = {kind:q.kind, sym:q.sym, at:now(), n:res ? res.buyers.length : 0, why: res ? '' : (why || 'no launch trades found')};
+  if (res && res.buyers.length){
+    if (q.kind === 'runner') st.runners++; else st.flops++;
+    for (const w of res.buyers){
+      const v = st.wallets[w] || (st.wallets[w] = {r:[], f:0, first:now()});
+      if (q.kind === 'runner'){ if (!v.r.some(x => x.m === q.mint)) v.r.push({m:q.mint, s:q.sym, x:Math.round(q.hi * 10) / 10}); }
+      else v.f++;
+      v.last = now();
+    }
+    if (q.kind === 'runner') feed('info', q.sym, 'Went up ' + q.hi.toFixed(1) + '×. Saved its first ' + res.buyers.length + ' buyers to learn which wallets get in early on winners.', tagOf(q.mint));
+    studyPrune();
+  }
+  const keys = Object.keys(st.done); if (keys.length > 1500) for (const k of keys.slice(0, keys.length - 1500)) delete st.done[k];
+  save();
+}
+function studyPrune(){
+  const st = S.study, ks = Object.keys(st.wallets);
+  if (ks.length <= STUDY.MAX_WALLETS) return;
+  ks.filter(k => st.wallets[k].r.length === 0).sort((a, b) => st.wallets[a].last - st.wallets[b].last)
+    .slice(0, ks.length - STUDY.MAX_WALLETS).forEach(k => delete st.wallets[k]);
+}
+/* a wallet counts as "smart" once it was early on 2+ winners and on more winners than flops */
+const isSmart = v => v && v.r.length >= 2 && v.r.length > v.f;
+function smartMatch(c, wallets){
+  const st = S.study, found = wallets.filter(w => isSmart(st.wallets[w]));
+  if (!found.length) return;
+  c.smart = found;
+  if (st.hits.some(h => h.mint === c.mint)) return;
+  st.hits.unshift({mint:c.mint, sym:c.sym || short(c.mint), at:now(), wallets:found, hi:c.hi || 1, last:c.last || 1});
+  st.hits = st.hits.slice(0, 100);
+  feed('info', c.sym, found.length + ' smart wallet' + (found.length > 1 ? 's were' : ' was') + ' among the first buyers. Watching how it does (not used for buying yet).', tagOf(c.mint));
+}
+function renderStudy(){
+  const el = $('#study'); if (!el) return;
+  const st = S.study || {wallets:{}, hits:[], queue:[]};
+  const list = Object.entries(st.wallets || {}).filter(([, v]) => v.r.length >= 1)
+    .sort((a, b) => (b[1].r.length - b[1].f * 0.5) - (a[1].r.length - a[1].f * 0.5) || b[1].last - a[1].last);
+  const smartN = list.filter(([, v]) => isSmart(v)).length;
+  $('#studyNote').textContent = 'watch-only · ' + (st.runners || 0) + ' winner' + (st.runners === 1 ? '' : 's') + ' and ' + (st.flops || 0) + ' flop' + (st.flops === 1 ? '' : 's') + ' studied · ' + smartN + ' smart wallet' + (smartN === 1 ? '' : 's') + (st.queue && st.queue.length ? ' · ' + st.queue.length + ' waiting' : '');
+  if (!list.length){
+    el.innerHTML = '<div class="muted" style="padding:14px 16px">Collecting. When a coin it’s following jumps ' + STUDY.RUNNER + '× or more, it looks up the first ' + STUDY.BUYERS + ' wallets that bought it. It also looks at coins that crashed, so sniper bots that buy everything don’t look smart. Give it a few days.</div>';
+    return;
+  }
+  const row = ([w, v]) => '<tr><td class="num"><a href="https://solscan.io/account/' + esc(w) + '" target="_blank" rel="noopener">' + esc(short(w)) + '</a>' + (isSmart(v) ? ' <span class="up" title="Early on 2+ winners and more winners than flops">★</span>' : '') + '</td>' +
+    '<td class="r num up">' + v.r.length + '</td><td class="r num ' + (v.f ? 'down' : 'muted') + '">' + v.f + '</td>' +
+    '<td class="why" style="color:var(--ink)">' + v.r.slice(-4).map(x => esc(x.s) + ' <span class="muted">' + x.x + '×</span>').join(', ') + '</td><td class="num nw">' + ago(now() - v.last) + ' ago</td></tr>';
+  const hits = (st.hits || []).slice(0, 12);
+  el.innerHTML = '<div class="tablewrap"><table><thead><tr><th>Wallet</th><th class="r">Early on winners</th><th class="r">Early on flops</th><th>Winners it was early on</th><th>Last seen</th></tr></thead><tbody>' + list.slice(0, 15).map(row).join('') + '</tbody></table></div>' +
+    (hits.length ? '<div class="muted" style="font-size:.8rem;padding:12px 16px 4px">New coins where smart wallets were among the first buyers (watch-only):</div><div class="tablewrap"><table><thead><tr><th>Coin</th><th>When</th><th class="r">Smart wallets</th><th class="r">High after</th><th class="r">Now</th></tr></thead><tbody>' +
+      hits.map(h => '<tr><td>' + esc(h.sym) + '</td><td class="num nw">' + ago(now() - h.at) + ' ago</td><td class="r num">' + h.wallets.length + '</td><td class="r num ' + cls(h.hi - 1) + '">' + pctS(h.hi - 1) + '</td><td class="r num ' + cls(h.last - 1) + '">' + pctS(h.last - 1) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
+    '<div class="muted" style="font-size:.8rem;padding:10px 16px 14px">★ = early on 2+ winners and more winners than flops. Early buyers can be the creator’s own wallets, so treat this as a lead to watch, not proof.</div>';
+}
+function render(){ renderStudy(); renderFlow(); renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
 
 /* ---------------- settings dialog ---------------- */
 function buildForm(vals){
@@ -1948,18 +2059,19 @@ function doSettings(n){
 }
 function doReset(){
   const running = S.running, keepBL = S.blacklist, keepStrikes = S.strikes;
-  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.funderQueue = []; S.rcQueue = [];
+  const keepStudy = S.study;
+  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.study = keepStudy; S.funderQueue = []; S.rcQueue = [];
   save(); render(); renderFeed();
 }
 function doSell(id){ const p = S.positions.find(x => x.id === id); if (p) closePos(p, 'you sold it by hand'); }
 function doBlAdd(a){ return blAdd(a, {kind:'manual', why:'added by you'}); }
 function doBlRemove(a){ delete S.blacklist[a]; delete S.strikes[a]; save(); renderBlacklist(); }
 function exportData(){
-  const cfg = Object.assign({}, CFG); cfg.heliusKey = cfg.heliusKey ? '(set)' : '';
+  const cfg = Object.assign({}, CFG); cfg.heliusKey = cfg.heliusKey ? '(set)' : ''; cfg.tgToken = cfg.tgToken ? '(set)' : '';
   const pick = c => ({mint:c.mint, sym:c.sym, src:c.src, status:c.status, reason:c.reason, detail:c.detail, tries:c.tries, first:c.first, passedQuick:!!c.passedQuick,
     creator:c.creator, snap0:c.snap0, snap:c.snap, hi:c.hi, lo:c.lo, last:c.last, lastAt:c.lastAt, gone:c.gone, deep:c.deep && c.deep.res});
   return {app:'Coin Scout', version:VERSION, exportedAt:new Date().toISOString(), cfg, cash:S.cash, start:S.start, equityNow:equity(), stats:S.stats,
-    blacklist:S.blacklist, strikes:S.strikes,
+    blacklist:S.blacklist, strikes:S.strikes, study:S.study,
     rejects:S.rejects, trades:S.trades, positions:S.positions, equity:S.equity, log:S.log, coins:Object.values(S.seen).map(pick)};
 }
 /* the server calls these */
@@ -2144,6 +2256,7 @@ if (IS_REMOTE){
   (async () => { for (;;){ try{ await monitor(); }catch(e){} await sleep(Math.max(3, +CFG.priceEvery || 5) * 1000); } })();
   setInterval(holderWatch, 30000);
   setInterval(trackSkipped, 5 * 60000);
+  setInterval(() => { studyStep().catch(() => {}); }, 45000);
   setInterval(trackSold, 60000);
   setInterval(solPrice, 10 * 60000);
   setInterval(() => { if (S.running || S.positions.length){ equityPoint(); save(); } }, 5 * 60000);
