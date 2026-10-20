@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v19 · Oct 20';
+const VERSION = 'v20 · Oct 20';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -341,6 +341,7 @@ const FIELDS = [
   {g:'Which coins to look at', k:'minAgeMin', l:'Coin must be at least', u:'min old', d:10},
   {k:'maxAgeHr', l:'Ignore coins older than', u:'hours', d:24},
   {k:'minLiq', l:'Minimum liquidity', u:'$', d:25000},
+  {k:'useChart', l:'Chart check before buying', t:'check', d:true, h:'Skips coins going straight up or sliding down, using the last 30 one-minute candles.'},
   {k:'minMcap', l:'Minimum market cap', u:'$', d:30000},
   {k:'maxMcap', l:'Maximum market cap', u:'$', d:3000000},
   {k:'minVol1h', l:'Minimum trading in the last hour', u:'$', d:15000},
@@ -515,12 +516,12 @@ async function solPrice(){
 
 /* ---------------- market data ---------------- */
 function mk(p){
-  const tx = (p.txns && p.txns.h1) || {};
+  const tx = (p.txns && p.txns.h1) || {}, t5 = (p.txns && p.txns.m5) || {};
   return {
     price:+p.priceUsd || 0, liq:(p.liquidity && p.liquidity.usd != null) ? +p.liquidity.usd : null,
     mcap:+(p.marketCap || p.fdv || 0), vol1h:+((p.volume && p.volume.h1) || 0),
     ch5m:+((p.priceChange && p.priceChange.m5) || 0), ch1h:+((p.priceChange && p.priceChange.h1) || 0),
-    buys1h:+(tx.buys || 0), sells1h:+(tx.sells || 0), created:+(p.pairCreatedAt || 0),
+    buys1h:+(tx.buys || 0), sells1h:+(tx.sells || 0), buys5m:+(t5.buys || 0), sells5m:+(t5.sells || 0), vol5m:+((p.volume && p.volume.m5) || 0), created:+(p.pairCreatedAt || 0),
     dex:p.dexId || '', url:p.url || '', sym:(p.baseToken && p.baseToken.symbol) || '', name:(p.baseToken && p.baseToken.name) || '', pair:p.pairAddress || ''
   };
 }
@@ -1379,7 +1380,42 @@ async function processOne(c, m){
   try{ fm = (await dsPairs([c.mint])).get(c.mint) || m; }catch(e){}
   r = quick(fm);
   if (!r.ok) return verdict(c, r);
+  setBusy('Chart check on ' + c.sym);
+  const cc = await chartCheck(fm); setBusy('');
+  if (!cc.ok){
+    if (c.chartSkip !== cc.key){ c.chartSkip = cc.key; feed('reject', c.sym, 'Skipped: ' + cc.key + ' (' + cc.detail + '). Will look again in a few minutes.', tagOf(c.mint)); }
+    return verdict(c, later(cc.key, cc.detail, 4));
+  }
   await buy(c, fm, h, deep, rep && rep.token && rep.token.decimals != null ? +rep.token.decimals : null, c.creator || (deep && deep.creator) || null);
+}
+
+
+/* ---------------- chart check: skip coins going straight up, or already sliding ---------------- */
+async function candles(pair){
+  const j = await getJSON('gt', 'https://api.geckoterminal.com/api/v2/networks/solana/pools/' + pair + '/ohlcv/minute?aggregate=1&limit=30&currency=usd');
+  const list = (j && j.data && j.data.attributes && j.data.attributes.ohlcv_list) || [];
+  return list.map(r => ({t:+r[0], o:+r[1], h:+r[2], l:+r[3], c:+r[4], v:+r[5]})).filter(k => k.c > 0).sort((a, b) => a.t - b.t);
+}
+function chartVerdict(k, m){
+  const pct = x => Math.round(x * 100) + '%';
+  if (m && m.buys5m + m.sells5m >= 20 && m.sells5m > m.buys5m * 1.2) return {ok:false, key:'Chart: sellers taking over', detail:m.sells5m + ' sells vs ' + m.buys5m + ' buys in the last 5 min'};
+  if (k.length < 5) return {ok:true, note:'not enough candles yet'};
+  const last = k[k.length - 1].c;
+  const hi = Math.max(...k.map(x => x.h)), lo = Math.min(...k.map(x => x.l));
+  const hiAgo = k.length - 1 - k.findIndex(x => x.h === hi);
+  if (last < hi * 0.75) return {ok:false, key:'Chart: falling from its high', detail:'down ' + pct(1 - last / hi) + ' from its high ' + hiAgo + ' min ago'};
+  if (lo > 0 && last >= lo * 3) return {ok:false, key:'Chart: going straight up', detail:'up ' + pct(last / lo - 1) + ' in ' + k.length + ' min'};
+  const t10 = k.slice(-10), greens = t10.filter(x => x.c >= x.o).length, start = t10[0].o;
+  let peak = t10[0].o, dd = 0; for (const x of t10){ dd = Math.max(dd, 1 - x.l / peak); peak = Math.max(peak, x.h); }   // pullbacks below an earlier high
+  if (start > 0 && last / start - 1 >= 0.6 && greens >= Math.ceil(t10.length * 0.7) && dd < 0.12) return {ok:false, key:'Chart: going straight up', detail:'up ' + pct(last / start - 1) + ' in ' + t10.length + ' min with no pullback'};
+  const t5 = k.slice(-5), reds = t5.filter(x => x.c < x.o).length;
+  if (t5.length === 5 && reds >= 4 && last < t5[0].o * 0.92) return {ok:false, key:'Chart: sliding down', detail:reds + ' of the last 5 minutes red, down ' + pct(1 - last / t5[0].o)};
+  return {ok:true};
+}
+async function chartCheck(m){
+  if (CFG.useChart === false || !m.pair) return {ok:true};
+  let k; try{ k = await candles(m.pair); }catch(e){ return {ok:true, note:'chart unavailable'}; }
+  return chartVerdict(k, m);
 }
 
 /* deep check in the background: when it finishes, the coin is looked at again right away with fresh prices */
@@ -1830,7 +1866,7 @@ const STAGES = [
   {k:'deep', l:'Deep check', i:'🕵️'}, {k:'trade', l:'Trading', i:'💹'}, {k:'sold', l:'Sold', i:'🏁'}
 ];
 const SAFETY_RE = /RugCheck|wallet|Top 10|Creator|print more|freeze|blacklist|Safety check/i;
-const DEEP_RE = /Deep check|Bundled|Linked|deep-check/i;
+const DEEP_RE = /Deep check|Bundled|Linked|deep-check|^Chart/i;
 function stageOfReason(r){ return DEEP_RE.test(r) ? 3 : SAFETY_RE.test(r) ? 2 : 1; }
 /* which step a feed line shows a coin reaching, and how it ended there */
 function flowEvent(l){
@@ -1915,7 +1951,6 @@ function studyAdd(c, kind){
   const st = S.study;
   if (c.studied || st.done[c.mint] || st.queue.some(q => q.mint === c.mint)) return;
   if (kind === 'flop'){
-    if (!c.passedQuick) return;                         // compare against coins that looked tradeable
     if (st.flops + st.queue.filter(q => q.kind === 'flop').length > st.runners + st.queue.filter(q => q.kind === 'runner').length + 3) return;  // keep it balanced
   }
   c.studied = true;
