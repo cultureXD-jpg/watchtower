@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v18 · Oct 19';
+const VERSION = 'v19 · Oct 20';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1708,6 +1708,7 @@ async function funderStep(){
     if (e instanceof UserError){ DEEP_OFF = e.message; renderBanners(); }
   } finally { setBusy(''); save(); }
 }
+let BL_ALL = false;
 function renderBlacklist(){
   const el = $('#blist'); if (!el) return;
   const list = Object.entries(S.blacklist).sort((a, b) => b[1].at - a[1].at);
@@ -1717,8 +1718,9 @@ function renderBlacklist(){
   if (!list.length){ el.innerHTML = '<div class="empty">Empty so far. Deployers land here when their coin rugs, or after ' + (CFG.blStrikes || 2) + ' of their coins crash 90%+. You can also add a wallet yourself above.</div>'; return; }
   const kind = k => k === 'funder' ? 'Funder' : k === 'manual' ? 'Added by you' : 'Deployer';
   el.innerHTML = '<table><thead><tr><th>Wallet</th><th>Type</th><th>Why</th><th>Added</th><th class="r">Coins blocked</th><th></th></tr></thead><tbody>' +
-    list.slice(0, 150).map(([a, v]) => '<tr><td class="num"><a href="https://solscan.io/account/' + esc(a) + '" target="_blank" rel="noopener">' + esc(short(a)) + '</a></td><td>' + kind(v.kind) + '</td><td class="why" style="color:var(--ink)">' + esc(v.why) + '</td><td class="num nw">' + ago(now() - v.at) + ' ago</td><td class="r num">' + (v.blocked || 0) + '</td><td><button class="btn small" data-unbl="' + esc(a) + '">Remove</button></td></tr>').join('') +
-    '</tbody></table>';
+    list.slice(0, BL_ALL ? 500 : 15).map(([a, v]) => '<tr><td class="num"><a href="https://solscan.io/account/' + esc(a) + '" target="_blank" rel="noopener">' + esc(short(a)) + '</a></td><td>' + kind(v.kind) + '</td><td class="why" style="color:var(--ink)">' + esc(v.why) + '</td><td class="num nw">' + ago(now() - v.at) + ' ago</td><td class="r num">' + (v.blocked || 0) + '</td><td><button class="btn small" data-unbl="' + esc(a) + '">Remove</button></td></tr>').join('') +
+    '</tbody></table>' +
+    (list.length > 15 ? '<div style="padding:10px 16px;text-align:center"><button class="btn small" data-blmore="1">' + (BL_ALL ? 'Show fewer' : 'Show all ' + list.length) + '</button></div>' : '');
 }
 
 /* follow skipped coins for 2 hours: did the rules save us money or cost us winners? */
@@ -2144,6 +2146,7 @@ $('#blBtn').onclick = () => {
   else if (doBlAdd(a)) $('#blInput').value = '';
 };
 $('#blist').addEventListener('click', e => {
+  if (e.target && e.target.getAttribute('data-blmore')){ BL_ALL = !BL_ALL; renderBlacklist(); if (!BL_ALL) $('#blist').closest('.panel').scrollIntoView({block:'start'}); return; }
   const a = e.target && e.target.getAttribute('data-unbl'); if (!a) return;
   IS_REMOTE ? send('blremove', a) : doBlRemove(a);
 });
