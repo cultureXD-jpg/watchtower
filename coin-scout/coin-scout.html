@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v20 · Oct 20';
+const VERSION = 'v21 · Oct 20';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -867,12 +867,14 @@ async function deepCheck(mint, rep, sym){
   DEC = ti.decimals; SUPPLY = +ti.supply || 1;
 
   say('reading the launch');
-  let first;
+  /* busy coins have too much history to read the launch on a free Helius plan:
+     then skip the launch-block part and still check the holders and who funded them */
+  let first = [], noLaunch = '';
   try{ first = (await launchTxs()).map(norm).filter(Boolean).sort((a, b) => a.slot - b.slot); }
-  catch(e){ if (e instanceof TooBusy) return {ok:false, why:e.message, calls:CALLS - calls0}; throw e; }
-  if (!first.length) return {ok:false, why:"couldn't find the launch trades", calls:CALLS - calls0};
-  const launch = first[0];
-  const creator = launch.payer, s0 = launch.slot, t0 = launch.time;
+  catch(e){ if (e instanceof TooBusy) noLaunch = e.message; else throw e; }
+  if (!first.length && !noLaunch) noLaunch = "couldn't find the launch trades";
+  const launch = first[0] || null;
+  const creator = launch ? launch.payer : ((rep && rep.creator) || null), s0 = launch ? launch.slot : -1;
   await resolveMarkets(first.flatMap(t => Object.keys(t.tok)));
 
   const early = new Map();
@@ -904,7 +906,7 @@ async function deepCheck(mint, rep, sym){
   }catch(e){ if (e instanceof UserError || e instanceof TooSlow) throw e; }
   await resolveMarkets([...holders.keys()]);
 
-  const roles = new Map(); const addRole = (w, r) => { if (!roles.has(w)) roles.set(w, new Set()); roles.get(w).add(r); };
+  const roles = new Map(); const addRole = (w, r) => { if (!w) return; if (!roles.has(w)) roles.set(w, new Set()); roles.get(w).add(r); };
   addRole(creator, 'creator');
   const queue = [], seen = new Set(), hop = new Map();
   const enqueue = (w, h) => { if (!w || seen.has(w) || isMarket(w) || seen.size >= DC.MAX_WALLETS) return; seen.add(w); hop.set(w, h); queue.push(w); };
@@ -977,7 +979,7 @@ async function deepCheck(mint, rep, sym){
   const reasons = suspect.slice(0, 2).flatMap(g => g.reasons.slice(0, 1));
   const wallets = [...new Set([...events.keys(), ...[...funders.values()].map(x => x.f)])].slice(0, 150);
   const cf = funders.get(creator);
-  return {ok:true, linkedPct:linked, creatorPct, bundle, groups:suspect.length, checked:A.checked, reasons, calls:CALLS - calls0, mode:MODE, creator, creatorFunder:cf ? cf.f : null, wallets};
+  return {ok:true, linkedPct:linked, creatorPct, bundle, groups:suspect.length, checked:A.checked, reasons, calls:CALLS - calls0, mode:MODE, creator, creatorFunder:cf ? cf.f : null, wallets, noLaunch};
 }
 
 function analyse({events, funders, roles, early, holders, creator, exchangeFunders}){
@@ -1100,7 +1102,7 @@ async function buy(c, m, h, deep, dec, creator){
   const bits = ['liquidity ' + usd(m.liq), 'market cap ' + usd(m.mcap), 'top 10 own ' + pctN(h.top10), m.buys1h + ' buys vs ' + m.sells1h + ' sells last hour'];
   if (m.curve) bits.push('still on the pump.fun curve');
   if (h.src === 'helius') bits.push('safety checked on-chain with Helius (RugCheck was down)');
-  bits.push(deep ? 'deep check clean (' + deep.checked + ' wallets, linked groups hold ' + pctN(deep.linkedPct) + ')' : 'no deep check');
+  bits.push(deep ? 'deep check clean (' + deep.checked + ' wallets, linked groups hold ' + pctN(deep.linkedPct) + (deep.noLaunch ? '; launch block not read' : '') + ')' : 'no deep check');
   bits.push(quoted ? 'real Jupiter quote via ' + route : 'estimated fill (no Jupiter quote)');
   const p = {id:c.mint + ':' + now(), mint:c.mint, sym:m.sym || c.sym || short(c.mint), name:m.name, url:m.url, at:now(),
     cost:size, tokens, tokens0:tokens, entry:avg, spot0:m.price, liq0:m.liq, mcap0:m.mcap, price:m.price, liq:m.liq, mcap:m.mcap, peak:m.price,
