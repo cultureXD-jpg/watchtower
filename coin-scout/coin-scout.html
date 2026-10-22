@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v21 · Oct 20';
+const VERSION = 'v22 · Oct 22';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -334,6 +334,7 @@ const FIELDS = [
   {k:'stopLoss', l:'Stop loss when down', u:'%', d:35},
   {k:'trailStart', l:'Turn on the trailing stop once up', u:'%', d:40},
   {k:'trail', l:'Trailing stop: sell if it falls this far from its high', u:'%', d:25},
+  {k:'beAt', l:'Once up this much, move the stop to the buy price', u:'%', d:6, h:'Measured on a real sale quote, after fees. A trade that went up can no longer turn into a big loss. 0 turns it off.'},
   {k:'maxHoldMin', l:'Sell anyway after', u:'min', d:360},
   {k:'priceEvery', l:'Check open trades every', u:'sec', d:5, h:'Faster checks catch small targets before they slip away.'},
   {k:'liqPull', l:'Sell if the pool loses this much more than the price explains', u:'%', d:35, h:'A sudden drop in the pool usually means someone is pulling the money out.'},
@@ -1127,16 +1128,16 @@ async function partial(p, frac, why){
     feed('win', p.sym, 'Sold half: ' + why + '. Got back ' + usd(r.got) + (r.quoted ? ' (real quote)' : '') + '; stop on the rest moved to the buy price.', tagOf(p.mint));
   } finally { p.busy = false; }
 }
-async function closePos(p, why, zero){
+async function closePos(p, why, zero, pre){
   if (p.closing) return; p.closing = true;
   let r = {got:0, quoted:false, route:''};
-  if (!zero) r = await sellNow(p, p.tokens);
+  if (!zero) r = pre || await sellNow(p, p.tokens);
   if (!zero) p.costs = (p.costs || 0) + Math.max(0, p.tokens * p.price - r.got);
   S.cash += r.got;
   const out = p.realized + r.got, pnl = out - p.cost;
   const t = {mint:p.mint, sym:p.sym, url:p.url, at:p.at, sold:now(), cost:p.cost, out, pnl, pnlPct:pnl / p.cost,
     entry:p.entry, exit:p.price, peakPct:p.peak / p.entry - 1, why:p.why, exitWhy:why, half:p.tpHit ? p.note : '', costs:p.costs || 0,
-    route:p.route || dexName(p.dex), dex:p.dex, quotedBuy:!!p.quoted, quotedSell:r.quoted, tokens0:p.tokens0 || p.tokens, liq0:p.liq0};
+    route:p.route || dexName(p.dex), dex:p.dex, quotedBuy:!!p.quoted, quotedSell:r.quoted, tokens0:p.tokens0 || p.tokens, liq0:p.liq0, realPeak:p.realPeak != null ? p.realPeak : null};
   if (/^quick-flip/.test(why) && CFG.tpUsd > 0) t.wf = whatIfStart(t);
   t.creator = p.creator || null;
   if (p.creator && /liquidity pulled|marked it as rugged|disappeared/.test(why)) blRug(p.creator, {mint:p.mint, sym:p.sym}, p.sym + ' rugged while we held it (' + why.split(' (')[0] + ')');
@@ -1233,12 +1234,14 @@ async function monitor(){
       if (p.curve && !m.curve){ p.curve = false; p.liq0 = m.liq; p.spot0 = m.price; }   // graduated from pump.fun while we held it
       p.price = m.price; if (m.liq != null) p.liq = m.liq; p.mcap = m.mcap; p.peak = Math.max(p.peak, m.price); p.checkedAt = now();
       let ch = m.price / p.entry - 1; const pk = p.peak / p.entry - 1, held = (now() - p.at) / 60000;
-      const stop = p.tpHit ? 0 : -CFG.stopLoss / 100;
+      if (+CFG.beAt > 0 && pk >= CFG.beAt / 100) p.be = true;
+      const stop = (p.tpHit || p.be) ? 0 : -CFG.stopLoss / 100;
+      const fast = p.fastAt && now() - p.fastAt < 15000;   // real-quote watcher is handling target and stops
       if (!p.curve && p.liq0 && p.spot0){
         const expected = p.liq0 * Math.sqrt(m.price / p.spot0);  // what the pool "should" be at this price
         if (p.liq < expected * (1 - CFG.liqPull / 100)){ await closePos(p, 'liquidity pulled (pool is ' + pctN(100 * (1 - p.liq / expected)) + ' smaller than the price explains)'); continue; }
       }
-      if (CFG.tpUsd > 0){
+      if (CFG.tpUsd > 0 && !fast){
         const prof = sellValue(p.tokens, p.price, p.liq) + p.realized - p.cost;
         if (prof >= CFG.tpUsd){
           /* confirm with a real Jupiter quote: the price feed can show a jump that a real sale wouldn't get */
@@ -1248,7 +1251,7 @@ async function monitor(){
           if (!p.falseTp){ p.falseTp = true; feed('info', p.sym, 'Price feed showed +' + usd(prof) + ' profit but a real sale would be ' + money(realProf) + '. Not selling yet.', tagOf(p.mint)); }
         }
       }
-      if (ch <= stop && p.dec != null && S.solUsd > 0){
+      if (!fast && ch <= stop && p.dec != null && S.solUsd > 0){
         /* price feeds can lag or glitch: confirm with a real Jupiter quote before selling */
         const q = await sellNow(p, p.tokens);
         if (q.quoted){
@@ -1259,16 +1262,45 @@ async function monitor(){
           }
         }
       }
-      if (ch <= stop){ await closePos(p, p.tpHit ? 'fell back to the buy price after taking profit' : 'stop loss hit at ' + pctS(ch)); continue; }
-      if (!p.tpHit && ch >= CFG.takeProfit / 100){
+      if (!fast && ch <= stop){ await closePos(p, !p.tpHit && p.be ? 'fell back to the buy price after being up ' + pctS(pk) : p.tpHit ? 'fell back to the buy price after taking profit' : 'stop loss hit at ' + pctS(ch)); continue; }
+      if (!fast && !p.tpHit && ch >= CFG.takeProfit / 100){
         if (CFG.halfAtTP){ await partial(p, 0.5, 'take profit hit at ' + pctS(ch)); }
         else { await closePos(p, 'take profit hit at ' + pctS(ch)); continue; }
       }
-      if (pk >= CFG.trailStart / 100 && m.price <= p.peak * (1 - CFG.trail / 100)){ await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - m.price / p.peak)) + ' from its high of ' + pctS(pk)); continue; }
+      if (!fast && pk >= CFG.trailStart / 100 && m.price <= p.peak * (1 - CFG.trail / 100)){ await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - m.price / p.peak)) + ' from its high of ' + pctS(pk)); continue; }
       if (held >= CFG.maxHoldMin){ await closePos(p, 'time limit reached (' + ago(now() - p.at) + ')'); continue; }
     }
     save(); render();
   } finally { monitoring = false; }
+}
+
+/* watch open trades with real Jupiter sell quotes every few seconds:
+   faster than the price feed, and the target and stops fire on what a sale would really get */
+async function fastWatch(){
+  if (!S.positions.length || !(S.solUsd > 0)) return;
+  for (const p of [...S.positions]){
+    if (p.closing || p.busy || p.dec == null || !S.positions.includes(p)) continue;
+    const q = await sellNow(p, p.tokens);
+    if (!q.quoted || p.closing || !S.positions.includes(p)) continue;
+    p.fastAt = now();
+    const val = q.got + p.realized, real = val / p.cost - 1;
+    p.realNow = real; p.realPeak = Math.max(p.realPeak == null ? -1 : p.realPeak, real);
+    const pk = p.realPeak;
+    if (+CFG.beAt > 0 && pk >= CFG.beAt / 100 && !p.be){ p.be = true; }
+    const stop = (p.tpHit || p.be) ? 0 : -CFG.stopLoss / 100;
+    if (CFG.tpUsd > 0 && val - p.cost >= CFG.tpUsd){ await closePos(p, 'quick-flip target hit at ' + pctS(real), false, q); continue; }
+    if (real <= stop){
+      await closePos(p, p.tpHit ? 'fell back to the buy price after taking profit' : p.be ? 'fell back to the buy price after being up ' + pctS(pk) : 'stop loss hit at ' + pctS(real), false, q);
+      continue;
+    }
+    if (!(CFG.tpUsd > 0) && !p.tpHit && real >= CFG.takeProfit / 100){
+      if (CFG.halfAtTP){ await partial(p, 0.5, 'take profit hit at ' + pctS(real)); continue; }
+      await closePos(p, 'take profit hit at ' + pctS(real), false, q); continue;
+    }
+    if (pk >= CFG.trailStart / 100 && 1 + real <= (1 + pk) * (1 - CFG.trail / 100)){
+      await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - (1 + real) / (1 + pk))) + ' from its high of ' + pctS(pk), false, q); continue;
+    }
+  }
 }
 
 /* every few minutes: are the big wallets dumping? */
@@ -2294,6 +2326,7 @@ if (IS_REMOTE){
   if (IS_ENGINE && S.running && CFG.tgHealth) setTimeout(() => tg('🔄 Coin Scout restarted on your server (after an update or a hiccup) and is running again.'), 5000);
   setInterval(() => { if (S.running) scanSources(); }, 30000);
   (async () => { for (;;){ try{ await monitor(); }catch(e){} await sleep(Math.max(3, +CFG.priceEvery || 5) * 1000); } })();
+  (async () => { for (;;){ try{ await fastWatch(); }catch(e){} await sleep(1200); } })();
   setInterval(holderWatch, 30000);
   setInterval(trackSkipped, 5 * 60000);
   setInterval(() => { studyStep().catch(() => {}); }, 45000);
