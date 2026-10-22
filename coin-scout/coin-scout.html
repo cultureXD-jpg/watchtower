@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v22 · Oct 22';
+const VERSION = 'v23 · Oct 22';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1108,7 +1108,8 @@ async function buy(c, m, h, deep, dec, creator){
   const p = {id:c.mint + ':' + now(), mint:c.mint, sym:m.sym || c.sym || short(c.mint), name:m.name, url:m.url, at:now(),
     cost:size, tokens, tokens0:tokens, entry:avg, spot0:m.price, liq0:m.liq, mcap0:m.mcap, price:m.price, liq:m.liq, mcap:m.mcap, peak:m.price,
     realized:0, costs:buyCost, tpHit:false, misses:0, holders0:h.owners, curve:!!m.curve, why:bits.join(' · '), hwAt:now(),
-    dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator};
+    dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator,
+    at0:{vol1h:m.vol1h, txs1h:m.buys1h + m.sells1h, avgTrade:(m.buys1h + m.sells1h) ? m.vol1h / (m.buys1h + m.sells1h) : null, ch5m:m.ch5m, ch1h:m.ch1h, ageMin:m.created ? Math.round((now() - m.created) / 60000) : null, mcap:m.mcap}};
   S.positions.push(p); S.stats.bought++;
   c.status = 'bought'; c.reason = 'Bought';
   tradeAlert('🟢 <b>Bought ' + esc(p.sym) + '</b>: ' + usd(size) + ' at ' + price(avg) + '\n' + usd(m.mcap) + ' market cap · ' + usd(m.liq) + ' liquidity · via ' + esc(route) + (m.url ? '\n' + m.url : ''));
@@ -1137,7 +1138,7 @@ async function closePos(p, why, zero, pre){
   const out = p.realized + r.got, pnl = out - p.cost;
   const t = {mint:p.mint, sym:p.sym, url:p.url, at:p.at, sold:now(), cost:p.cost, out, pnl, pnlPct:pnl / p.cost,
     entry:p.entry, exit:p.price, peakPct:p.peak / p.entry - 1, why:p.why, exitWhy:why, half:p.tpHit ? p.note : '', costs:p.costs || 0,
-    route:p.route || dexName(p.dex), dex:p.dex, quotedBuy:!!p.quoted, quotedSell:r.quoted, tokens0:p.tokens0 || p.tokens, liq0:p.liq0, realPeak:p.realPeak != null ? p.realPeak : null};
+    route:p.route || dexName(p.dex), dex:p.dex, quotedBuy:!!p.quoted, quotedSell:r.quoted, tokens0:p.tokens0 || p.tokens, liq0:p.liq0, realPeak:p.realPeak != null ? p.realPeak : null, at0:p.at0 || null};
   if (/^quick-flip/.test(why) && CFG.tpUsd > 0) t.wf = whatIfStart(t);
   t.creator = p.creator || null;
   if (p.creator && /liquidity pulled|marked it as rugged|disappeared/.test(why)) blRug(p.creator, {mint:p.mint, sym:p.sym}, p.sym + ' rugged while we held it (' + why.split(' (')[0] + ')');
@@ -1234,7 +1235,7 @@ async function monitor(){
       if (p.curve && !m.curve){ p.curve = false; p.liq0 = m.liq; p.spot0 = m.price; }   // graduated from pump.fun while we held it
       p.price = m.price; if (m.liq != null) p.liq = m.liq; p.mcap = m.mcap; p.peak = Math.max(p.peak, m.price); p.checkedAt = now();
       let ch = m.price / p.entry - 1; const pk = p.peak / p.entry - 1, held = (now() - p.at) / 60000;
-      if (+CFG.beAt > 0 && pk >= CFG.beAt / 100) p.be = true;
+      if (+CFG.beAt > 0 && pk >= CFG.beAt / 100 && p.dec == null) p.be = true;   // with real quotes, only the quote watcher arms this (the feed can show highs a sale wouldn't get)
       const stop = (p.tpHit || p.be) ? 0 : -CFG.stopLoss / 100;
       const fast = p.fastAt && now() - p.fastAt < 15000;   // real-quote watcher is handling target and stops
       if (!p.curve && p.liq0 && p.spot0){
