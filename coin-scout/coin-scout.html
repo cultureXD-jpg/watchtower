@@ -302,7 +302,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v23 · Oct 22';
+const VERSION = 'v24 · Oct 23';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1434,8 +1434,11 @@ async function candles(pair){
 function chartVerdict(k, m){
   const pct = x => Math.round(x * 100) + '%';
   if (m && m.buys5m + m.sells5m >= 20 && m.sells5m > m.buys5m * 1.2) return {ok:false, key:'Chart: sellers taking over', detail:m.sells5m + ' sells vs ' + m.buys5m + ' buys in the last 5 min'};
-  if (k.length < 5) return {ok:true, note:'not enough candles yet'};
+  /* brand-new coins often have no candles yet: wait instead of buying blind */
+  if (k.length < 5) return {ok:false, key:'Chart: no chart data yet', detail:'waiting for a few minutes of candles'};
   const last = k[k.length - 1].c;
+  /* a sudden jump in the last 2 minutes: let it settle first */
+  if (k.length >= 3 && k[k.length - 3].c > 0 && last / k[k.length - 3].c - 1 > 0.15) return {ok:false, key:'Chart: just spiked', detail:'up ' + pct(last / k[k.length - 3].c - 1) + ' in the last 2 min'};
   const hi = Math.max(...k.map(x => x.h)), lo = Math.min(...k.map(x => x.l));
   const hiAgo = k.length - 1 - k.findIndex(x => x.h === hi);
   if (last < hi * 0.75) return {ok:false, key:'Chart: falling from its high', detail:'down ' + pct(1 - last / hi) + ' from its high ' + hiAgo + ' min ago'};
@@ -1443,13 +1446,22 @@ function chartVerdict(k, m){
   const t10 = k.slice(-10), greens = t10.filter(x => x.c >= x.o).length, start = t10[0].o;
   let peak = t10[0].o, dd = 0; for (const x of t10){ dd = Math.max(dd, 1 - x.l / peak); peak = Math.max(peak, x.h); }   // pullbacks below an earlier high
   if (start > 0 && last / start - 1 >= 0.6 && greens >= Math.ceil(t10.length * 0.7) && dd < 0.12) return {ok:false, key:'Chart: going straight up', detail:'up ' + pct(last / start - 1) + ' in ' + t10.length + ' min with no pullback'};
+  /* heavy selling near the top: the biggest-volume candle of the last 5 is red and close to the high */
+  const avgV = k.reduce((a, x) => a + x.v, 0) / k.length;
+  const big = k.slice(-5).reduce((a, x) => x.v > a.v ? x : a);
+  if (big.c < big.o && big.v >= 2 * avgV && big.h >= hi * 0.9) return {ok:false, key:'Chart: heavy selling at the top', detail:'the biggest volume candle near the high was red'};
   const t5 = k.slice(-5), reds = t5.filter(x => x.c < x.o).length;
   if (t5.length === 5 && reds >= 4 && last < t5[0].o * 0.92) return {ok:false, key:'Chart: sliding down', detail:reds + ' of the last 5 minutes red, down ' + pct(1 - last / t5[0].o)};
   return {ok:true};
 }
 async function chartCheck(m){
-  if (CFG.useChart === false || !m.pair) return {ok:true};
-  let k; try{ k = await candles(m.pair); }catch(e){ return {ok:true, note:'chart unavailable'}; }
+  if (CFG.useChart === false) return {ok:true};
+  /* these work even before the coin has candles */
+  if (m.ch5m >= 60) return {ok:false, key:'Chart: just spiked', detail:'up ' + Math.round(m.ch5m) + '% in the last 5 min'};
+  const n = (m.buys1h || 0) + (m.sells1h || 0);
+  if (n >= 500 && m.vol1h / n < 10) return {ok:false, key:'Trading looks fake', detail:'average trade only $' + (m.vol1h / n).toFixed(2) + ' across ' + n.toLocaleString() + ' trades (volume bots)'};
+  if (!m.pair) return {ok:false, key:'Chart: no chart data yet', detail:'no pool address yet'};
+  let k; try{ k = await candles(m.pair); }catch(e){ k = []; }
   return chartVerdict(k, m);
 }
 
