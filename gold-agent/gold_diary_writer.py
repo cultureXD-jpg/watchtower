@@ -10,6 +10,7 @@ import csv
 import os
 import requests
 import sys
+import time
 from config import API_KEY, SECRET_KEY, FRED_KEY, GOLD_HOME
 
 TZ = ZoneInfo("America/Los_Angeles")
@@ -40,30 +41,51 @@ amount = round(abs(change), 2)
 dollar_change = dollar[-1].close - dollar[-2].close
 dollar_direction = "up" if dollar_change > 0 else "down"
 
-fred_url = "https://api.stlouisfed.org/fred/series/observations"
-fred_params = {
-    "series_id": "CPIAUCSL",
-    "api_key": FRED_KEY,
-    "file_type": "json",
-    "sort_order": "desc",
-    "limit": 1
-}
-fred_data = requests.get(fred_url, params=fred_params, timeout=30).json()
-inflation = fred_data["observations"][0]["value"]
+diary = os.path.join(GOLD_HOME, "gold_diary.csv")
+
+def fred(path, params, tries=3):
+    # FRED sometimes answers with an empty or HTML page instead of JSON - retry before giving up
+    for attempt in range(1, tries + 1):
+        try:
+            r = requests.get("https://api.stlouisfed.org/fred/" + path, params=dict(params, api_key=FRED_KEY, file_type="json"), timeout=30)
+            r.raise_for_status()
+            return r.json()
+        except (requests.RequestException, ValueError) as e:
+            print(f"FRED {path} attempt {attempt}/{tries} failed: {str(e).replace(FRED_KEY, '***')}")
+            if attempt < tries:
+                time.sleep(20 * attempt)
+    return None
+
+def last_cpi():
+    # CPI only changes once a month, so the previous diary row is a safe stand-in
+    if os.path.exists(diary):
+        with open(diary) as f:
+            for r in reversed([r for r in csv.reader(f) if r][1:]):
+                if len(r) > 5 and r[5]:
+                    return r[5]
+    return ""
+
+fred_data = fred("series/observations", {"series_id": "CPIAUCSL", "sort_order": "desc", "limit": 1})
+if fred_data and fred_data.get("observations"):
+    inflation = fred_data["observations"][0]["value"]
+else:
+    inflation = last_cpi()
+    print("FRED CPI unavailable - reusing last diary value:", inflation)
 
 today = datetime.now(TZ).strftime("%Y-%m-%d")
 releases = {"CPI": 10, "Jobs": 50}
 fed_days = ["2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17", "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09"]
 happened = []
 for name, rid in releases.items():
-    r = requests.get("https://api.stlouisfed.org/fred/release/dates", params={"release_id": rid, "api_key": FRED_KEY, "file_type": "json", "sort_order": "desc", "limit": 5}, timeout=30).json()
-    if today in [d["date"] for d in r["release_dates"]]:
+    r = fred("release/dates", {"release_id": rid, "sort_order": "desc", "limit": 5})
+    if r is None:
+        happened.append(name + "?")
+    elif today in [d["date"] for d in r.get("release_dates", [])]:
         happened.append(name)
 if today in fed_days:
     happened.append("Fed decision")
 events = ", ".join(happened) if happened else "none"
 now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
-diary = os.path.join(GOLD_HOME, "gold_diary.csv")
 os.makedirs(os.path.dirname(diary), exist_ok=True)
 header = ["Timestamp", "Gold Price (GLD)", "Gold Direction", "Gold Change ($)", "Dollar Direction", "Inflation (CPI)", "Events"]
 

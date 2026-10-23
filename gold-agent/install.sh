@@ -23,8 +23,14 @@ chmod 600 "$DATA/password.txt"
 cat > /etc/systemd/system/gold-diary.service <<EOF2
 [Unit]
 Description=Gold Agent: daily diary entry
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=3h
+StartLimitBurst=5
 [Service]
 Type=oneshot
+Restart=on-failure
+RestartSec=15min
 Environment=GOLD_HOME=$DATA
 WorkingDirectory=$APP
 ExecStart=$APP/.venv/bin/python $APP/gold_diary_writer.py
