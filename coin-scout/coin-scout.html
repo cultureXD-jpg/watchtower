@@ -263,6 +263,11 @@ legend{font:600 .78rem var(--body);text-transform:uppercase;letter-spacing:.06em
 </section>
 
 <section class="panel">
+  <div class="hd"><h2>Coin lifespans (learning)</h2><span class="muted" id="lifeNote" style="font-size:.85rem"></span></div>
+  <div class="bars" id="life"></div>
+</section>
+
+<section class="panel">
   <div class="hd"><h2>Smart wallets (learning)</h2><span class="muted" id="studyNote" style="font-size:.85rem"></span></div>
   <div id="study"></div>
 </section>
@@ -302,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v24 · Oct 23';
+const VERSION = 'v25 · Oct 23';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -342,6 +347,7 @@ const FIELDS = [
   {g:'Which coins to look at', k:'minAgeMin', l:'Coin must be at least', u:'min old', d:10},
   {k:'maxAgeHr', l:'Ignore coins older than', u:'hours', d:24},
   {k:'minLiq', l:'Minimum liquidity', u:'$', d:25000},
+  {k:'useLife', l:'Avoid the usual dump time', t:'check', d:true, h:'Learns how old coins usually are when they get dumped. Skips buying, and sells early, when most similar coins died soon after that age.'},
   {k:'useChart', l:'Chart check before buying', t:'check', d:true, h:'Skips coins going straight up or sliding down, using the last 30 one-minute candles.'},
   {k:'minMcap', l:'Minimum market cap', u:'$', d:30000},
   {k:'maxMcap', l:'Maximum market cap', u:'$', d:3000000},
@@ -390,7 +396,7 @@ function fresh(){
     equity:[[now(), +CFG.startCash]], stats:{seen:0, quick:0, deep:0, bought:0}, deepTimes:[], running:false, lastScan:0, solUsd:150};
 }
 let S = Object.assign(fresh(), store.get('state') || {});
-S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.study = S.study || {queue:[], done:{}, wallets:{}, hits:[], runners:0, flops:0, times:[]}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
+S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.study = S.study || {queue:[], done:{}, wallets:{}, hits:[], runners:0, flops:0, times:[]}; S.life = S.life || {d:[], a:[]}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
 let saveT = null, saveWarned = false;
 function save(){
   clearTimeout(saveT);
@@ -1108,7 +1114,7 @@ async function buy(c, m, h, deep, dec, creator){
   const p = {id:c.mint + ':' + now(), mint:c.mint, sym:m.sym || c.sym || short(c.mint), name:m.name, url:m.url, at:now(),
     cost:size, tokens, tokens0:tokens, entry:avg, spot0:m.price, liq0:m.liq, mcap0:m.mcap, price:m.price, liq:m.liq, mcap:m.mcap, peak:m.price,
     realized:0, costs:buyCost, tpHit:false, misses:0, holders0:h.owners, curve:!!m.curve, why:bits.join(' · '), hwAt:now(),
-    dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator,
+    dec, dex:m.dex, pair:m.pair, route, quoted, impact, creator, created:m.created || null,
     at0:{vol1h:m.vol1h, txs1h:m.buys1h + m.sells1h, avgTrade:(m.buys1h + m.sells1h) ? m.vol1h / (m.buys1h + m.sells1h) : null, ch5m:m.ch5m, ch1h:m.ch1h, ageMin:m.created ? Math.round((now() - m.created) / 60000) : null, mcap:m.mcap}};
   S.positions.push(p); S.stats.bought++;
   c.status = 'bought'; c.reason = 'Bought';
@@ -1269,6 +1275,7 @@ async function monitor(){
         else { await closePos(p, 'take profit hit at ' + pctS(ch)); continue; }
       }
       if (!fast && pk >= CFG.trailStart / 100 && m.price <= p.peak * (1 - CFG.trail / 100)){ await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - m.price / p.peak)) + ' from its high of ' + pctS(pk)); continue; }
+      if (!fast){ const lw = lifeSellCheck(p); if (lw){ await closePos(p, lw); continue; } }
       if (held >= CFG.maxHoldMin){ await closePos(p, 'time limit reached (' + ago(now() - p.at) + ')'); continue; }
     }
     save(); render();
@@ -1298,6 +1305,8 @@ async function fastWatch(){
       if (CFG.halfAtTP){ await partial(p, 0.5, 'take profit hit at ' + pctS(real)); continue; }
       await closePos(p, 'take profit hit at ' + pctS(real), false, q); continue;
     }
+    const lw = lifeSellCheck(p);
+    if (lw){ await closePos(p, lw, false, q); continue; }
     if (pk >= CFG.trailStart / 100 && 1 + real <= (1 + pk) * (1 - CFG.trail / 100)){
       await closePos(p, 'trailing stop: fell ' + pctN(100 * (1 - (1 + real) / (1 + pk))) + ' from its high of ' + pctS(pk), false, q); continue;
     }
@@ -1415,6 +1424,11 @@ async function processOne(c, m){
   try{ fm = (await dsPairs([c.mint])).get(c.mint) || m; }catch(e){}
   r = quick(fm);
   if (!r.ok) return verdict(c, r);
+  const lc = lifeBuyCheck(fm);
+  if (!lc.ok){
+    if (c.chartSkip !== lc.key){ c.chartSkip = lc.key; feed('reject', c.sym, 'Skipped: ' + lc.key + ' (' + lc.detail + '). Will look again later.', tagOf(c.mint)); }
+    return verdict(c, later(lc.key, lc.detail, 5));
+  }
   setBusy('Chart check on ' + c.sym);
   const cc = await chartCheck(fm); setBusy('');
   if (!cc.ok){
@@ -1814,17 +1828,20 @@ async function trackSkipped(){
     /* follow every coin that passed the quick checks, plus a fixed 1-in-8 sample of the rest, for the full 2 hours
        (before, only the 150 newest were followed, so each coin dropped out after a few minutes) */
     const pick = c => c.passedQuick || [...c.mint].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 9973, 7) % 8 === 0;
-    const list = Object.values(S.seen).filter(c => c.p0 && c.status !== 'bought' && now() - c.t0 < 2 * 3600e3 && pick(c))
+    lifeCensor();
+    const list = Object.values(S.seen).filter(c => c.p0 && now() - c.t0 < 2 * 3600e3 && pick(c))
       .sort((a, b) => b.t0 - a.t0).slice(0, 300);
     if (!list.length) return;
     let mm; try{ mm = await dsPairs(list.map(c => c.mint)); }catch(e){ return; }
     for (const c of list){
       const m = mm.get(c.mint);
-      if (!m || !m.price){ c.gone = (c.gone || 0) + 1; if (c.gone >= 3 && !c.struck) crashed(c); continue; }
+      if (!m || !m.price){ c.gone = (c.gone || 0) + 1; if (c.gone >= 3){ lifeDeath(c); if (!c.struck) crashed(c); } continue; }
+      if (m.created) c.created = m.created;
       const r = m.price / c.p0;
       c.hi = Math.max(c.hi || 1, r); c.lo = Math.min(c.lo || 1, r); c.last = r; c.lastAt = now();
       if (c.hi >= STUDY.RUNNER) studyAdd(c, 'runner');
       const hit = c.smart && S.study.hits.find(h => h.mint === c.mint); if (hit){ hit.hi = c.hi; hit.last = r; }
+      if (r <= 0.15 * c.hi) lifeDeath(c);
       if (r <= 0.1 && !c.struck) crashed(c);
     }
     await rcStep();
@@ -2085,7 +2102,57 @@ function renderStudy(){
       hits.map(h => '<tr><td>' + esc(h.sym) + '</td><td class="num nw">' + ago(now() - h.at) + ' ago</td><td class="r num">' + h.wallets.length + '</td><td class="r num ' + cls(h.hi - 1) + '">' + pctS(h.hi - 1) + '</td><td class="r num ' + cls(h.last - 1) + '">' + pctS(h.last - 1) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
     '<div class="muted" style="font-size:.8rem;padding:10px 16px 14px">★ = early on 2+ winners and more winners than flops. Early buyers can be the creator’s own wallets, so treat this as a lead to watch, not proof.</div>';
 }
-function render(){ renderStudy(); renderFlow(); renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
+
+/* =====================================================================
+   Coin lifespans: how old are coins when they get dumped?
+   Follows every coin that passed the quick checks for 2 hours. A coin "dies" when it falls 85%+ from its high
+   (or its price data disappears). Coins still alive after 2 hours count as survivors.
+   ===================================================================== */
+const LIFE = {MIN_N:40, BUY_WIN:15, BUY_P:0.4, SELL_WIN:5, SELL_P:0.35};
+function lifePush(arr, v){ arr.push(Math.round(v * 10) / 10); if (arr.length > 1500) arr.splice(0, arr.length - 1500); }
+function lifeDeath(c){
+  if (!c.passedQuick || c.lifeDone || !c.created) return;
+  c.lifeDone = true; lifePush(S.life.d, (now() - c.created) / 60000);
+}
+function lifeCensor(){
+  for (const c of Object.values(S.seen))
+    if (c.passedQuick && !c.lifeDone && c.created && c.t0 && c.lastAt && now() - c.t0 >= 2 * 3600e3){ c.lifeDone = true; lifePush(S.life.a, (c.lastAt - c.created) / 60000); }
+}
+/* of coins seen alive at this age, what share died within the next `win` minutes? */
+function lifeRisk(age, win){
+  const L = S.life || {d:[], a:[]};
+  let atRisk = 0, die = 0;
+  for (const x of L.d) if (x > age){ atRisk++; if (x <= age + win) die++; }
+  for (const x of L.a) if (x > age) atRisk++;
+  return {n:atRisk, p:atRisk ? die / atRisk : 0};
+}
+function lifeBuyCheck(m){
+  if (CFG.useLife === false || !m.created) return {ok:true};
+  const age = (now() - m.created) / 60000, r = lifeRisk(age, LIFE.BUY_WIN);
+  if (r.n >= LIFE.MIN_N && r.p >= LIFE.BUY_P) return {ok:false, key:'Usually dumped soon at this age', detail:Math.round(r.p * 100) + '% of ' + r.n + ' similar coins died within ' + LIFE.BUY_WIN + ' min of being ' + Math.round(age) + ' min old'};
+  return {ok:true};
+}
+function lifeSellCheck(p){
+  if (CFG.useLife === false || !p.created) return null;
+  const age = (now() - p.created) / 60000, r = lifeRisk(age, LIFE.SELL_WIN);
+  if (r.n >= LIFE.MIN_N && r.p >= LIFE.SELL_P) return 'most similar coins get dumped around this age (' + Math.round(r.p * 100) + '% died within ' + LIFE.SELL_WIN + ' min of being ' + Math.round(age) + ' min old)';
+  return null;
+}
+function renderLife(){
+  const el = $('#life'); if (!el) return;
+  const L = S.life || {d:[], a:[]}, n = L.d.length + L.a.length;
+  const med = median(L.d);
+  $('#lifeNote').textContent = n ? n + ' coins followed · ' + L.d.length + ' got dumped · ' + L.a.length + ' still alive after 2h' + (med != null ? ' · typical dump age ' + Math.round(med) + ' min' : '') : '';
+  if (n < 10){ el.innerHTML = '<div class="muted" style="padding:6px 0">Collecting. It follows every coin that passes the quick checks for 2 hours and notes how old it was when it got dumped (fell 85%+). Give it a day.</div>'; return; }
+  const rows = [];
+  for (let a = 0; a < 120; a += 10){
+    const r = lifeRisk(a, LIFE.BUY_WIN);
+    rows.push('<div class="bar"><span>' + a + '–' + (a + 10) + ' min old</span><i style="width:' + Math.max(2, r.p * 100) + '%;' + (r.p >= LIFE.BUY_P ? 'background:var(--down)' : '') + '"></i><span class="n">' + (r.n ? Math.round(r.p * 100) + '%' : '—') + '</span><span class="a muted">' + r.n + ' coins</span></div>');
+  }
+  el.innerHTML = '<div class="bar head"><span>Coin age</span><i style="visibility:hidden"></i><span class="n">Risk</span><span class="a">Coins followed</span></div>' + rows.join('') +
+    '<div class="muted" style="font-size:.8rem;margin-top:8px">Risk = share of coins that got dumped within 15 minutes of reaching that age. It skips buying when ' + Math.round(LIFE.BUY_P * 100) + '%+ of similar coins got dumped within 15 minutes of that age, and sells an open trade early when ' + Math.round(LIFE.SELL_P * 100) + '%+ got dumped within 5 minutes. Each age only counts once ' + LIFE.MIN_N + '+ coins have been followed.</div>';
+}
+function render(){ renderLife(); renderStudy(); renderFlow(); renderBlacklist(); renderWhatIf(); renderMode(); renderStrat(); renderStatus(); renderBanners(); renderStats(); renderOpen(); renderJournal(); renderRejects(); renderChart(); renderHealth(); }
 
 /* ---------------- settings dialog ---------------- */
 function buildForm(vals){
@@ -2143,8 +2210,8 @@ function doSettings(n){
 }
 function doReset(){
   const running = S.running, keepBL = S.blacklist, keepStrikes = S.strikes;
-  const keepStudy = S.study;
-  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.study = keepStudy; S.funderQueue = []; S.rcQueue = [];
+  const keepStudy = S.study, keepLife = S.life;
+  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.study = keepStudy; S.life = keepLife; S.funderQueue = []; S.rcQueue = [];
   save(); render(); renderFeed();
 }
 function doSell(id){ const p = S.positions.find(x => x.id === id); if (p) closePos(p, 'you sold it by hand'); }
@@ -2155,7 +2222,7 @@ function exportData(){
   const pick = c => ({mint:c.mint, sym:c.sym, src:c.src, status:c.status, reason:c.reason, detail:c.detail, tries:c.tries, first:c.first, passedQuick:!!c.passedQuick,
     creator:c.creator, snap0:c.snap0, snap:c.snap, hi:c.hi, lo:c.lo, last:c.last, lastAt:c.lastAt, gone:c.gone, deep:c.deep && c.deep.res});
   return {app:'Coin Scout', version:VERSION, exportedAt:new Date().toISOString(), cfg, cash:S.cash, start:S.start, equityNow:equity(), stats:S.stats,
-    blacklist:S.blacklist, strikes:S.strikes, study:S.study,
+    blacklist:S.blacklist, strikes:S.strikes, study:S.study, life:S.life,
     rejects:S.rejects, trades:S.trades, positions:S.positions, equity:S.equity, log:S.log, coins:Object.values(S.seen).map(pick)};
 }
 /* the server calls these */
@@ -2341,7 +2408,7 @@ if (IS_REMOTE){
   (async () => { for (;;){ try{ await monitor(); }catch(e){} await sleep(Math.max(3, +CFG.priceEvery || 5) * 1000); } })();
   (async () => { for (;;){ try{ await fastWatch(); }catch(e){} await sleep(1200); } })();
   setInterval(holderWatch, 30000);
-  setInterval(trackSkipped, 5 * 60000);
+  setInterval(trackSkipped, 2 * 60000);
   setInterval(() => { studyStep().catch(() => {}); }, 45000);
   setInterval(trackSold, 60000);
   setInterval(solPrice, 10 * 60000);
