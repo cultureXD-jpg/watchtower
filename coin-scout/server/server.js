@@ -67,11 +67,27 @@ process.on('uncaughtException', e => console.error('uncaught:', e && e.stack));
 process.on('unhandledRejection', e => console.error('unhandled:', e && (e.stack || e)));
 
 /* ---------- web dashboard ---------- */
+/* login: the browser's password popup (Basic auth) or a sign-in cookie from the login page.
+   Some browsers, like the one built into the Claude app, never show the popup, so they use the page. */
+const COOKIE = 'cs_login';
+const TOKEN = require('crypto').createHash('sha256').update('coin-scout-login:' + PASSWORD).digest('hex');
+function cookieOk(req){
+  return (req.headers.cookie || '').split(';').some(c => c.trim() === COOKIE + '=' + TOKEN);
+}
 function authed(req){
+  if (cookieOk(req)) return true;
   const h = req.headers.authorization || '';
   if (!h.startsWith('Basic ')) return false;
   const dec = Buffer.from(h.slice(6), 'base64').toString();
   return dec.slice(dec.indexOf(':') + 1) === PASSWORD;
+}
+function loginPage(bad){
+  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coin Scout sign in</title><style>' +
+    ':root{color-scheme:light dark;--bg:#F2F0EA;--s:#fff;--i:#15171C;--m:#5D636F;--l:#DCD8CE;--a:#2E62F0;--d:#D9412A}@media (prefers-color-scheme:dark){:root{--bg:#0D0F13;--s:#15181E;--i:#ECEEF2;--m:#9399A5;--l:#262A33;--a:#7EA1FF;--d:#FF6B57}}' +
+    'body{margin:0;background:var(--bg);color:var(--i);font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;padding:0 16px}form{background:var(--s);border:1px solid var(--l);border-radius:14px;padding:22px;width:100%;max-width:340px;display:grid;gap:12px}' +
+    'h1{font-size:1.3rem;margin:0}p{margin:0;color:var(--m);font-size:.9rem}input{padding:10px 12px;border:1px solid var(--l);border-radius:9px;background:var(--bg);color:var(--i);font-size:1rem}button{padding:10px;border:0;border-radius:9px;background:var(--a);color:#fff;font-weight:600;font-size:1rem;cursor:pointer}.bad{color:var(--d)}</style></head><body>' +
+    '<form method="post" action="/login"><h1>Coin Scout</h1><p>Enter your Coin Scout password. This browser stays signed in.</p>' + (bad ? '<p class="bad">That password didn’t match. Try again.</p>' : '') +
+    '<input type="password" name="password" id="password" autocomplete="current-password" autofocus required aria-label="Password"><button type="submit">Sign in</button></form></body></html>';
 }
 function body(req){
   return new Promise((res, rej) => {
@@ -86,11 +102,26 @@ function json(res, code, obj, extra){
 
 http.createServer(async (req, res) => {
   try{
-    if (!authed(req)){
-      res.writeHead(401, {'WWW-Authenticate':'Basic realm="Coin Scout"', 'Content-Type':'text/plain'});
-      return res.end('Password needed. Any username works; use your Coin Scout password.');
-    }
     const url = req.url.split('?')[0];
+    if (req.method === 'POST' && url === '/login'){
+      let b = ''; req.on('data', c => { b += c; if (b.length > 4000) req.destroy(); });
+      await new Promise(r => req.on('end', r));
+      const pw = new URLSearchParams(b).get('password') || '';
+      if (pw.trim() === PASSWORD){
+        res.writeHead(303, {'Set-Cookie':COOKIE + '=' + TOKEN + '; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax', 'Location':'/'});
+        return res.end();
+      }
+      res.writeHead(401, {'Content-Type':'text/html; charset=utf-8'}); return res.end(loginPage(true));
+    }
+    if (!authed(req)){
+      if (req.method === 'GET' && (url === '/' || url === '/index.html')){
+        /* the login page; browsers that support it can still use the password popup by refreshing with credentials */
+        res.writeHead(200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'});
+        return res.end(loginPage(false));
+      }
+      res.writeHead(401, {'Content-Type':'text/plain'});
+      return res.end('Please sign in at / first.');
+    }
     if (req.method === 'GET' && (url === '/' || url === '/index.html')){
       res.writeHead(200, {'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store'});
       return res.end(html);
