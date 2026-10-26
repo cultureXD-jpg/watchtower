@@ -19,6 +19,7 @@ chmod 600 "$DATA/password.txt"
 
 cat > /etc/systemd/system/coin-scout.service <<EOF2
 [Unit]
+StartLimitIntervalSec=0
 Description=Coin Scout paper-trading bot
 After=network-online.target
 Wants=network-online.target

@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v26 · Oct 26';
+const VERSION = 'v27 · Oct 26';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -2365,6 +2365,7 @@ async function poll(){
     if (now() - lastOk > 15000) showConn('Can’t reach the server right now. Retrying… (' + e.message + ')');
   } finally { polling = false; }
 }
+let UPDATING = false;   // one tap only: repeated taps used to restart the bot over and over
 function renderServer(){
   let el = $('#srvLine');
   if (!el){
@@ -2374,9 +2375,10 @@ function renderServer(){
   }
   const up = srvInfo.upSince ? ago(now() - srvInfo.upSince) : '?';
   el.innerHTML = '<span>Running on your server · up ' + up + (srvInfo.version ? ' · code ' + esc(srvInfo.version) : '') + '</span>' +
-    '<button class="btn small" id="updBtn">Check for updates</button><span id="updMsg"></span>';
+    '<button class="btn small" id="updBtn"' + (UPDATING ? ' disabled' : '') + '>' + (UPDATING ? 'Updating…' : 'Check for updates') + '</button><span id="updMsg">' + (UPDATING ? ' The page will reload by itself in about 30 seconds. No need to tap again.' : '') + '</span>';
   $('#updBtn').onclick = async () => {
-    $('#updMsg').textContent = 'Updating… the page will come back in about 30 seconds.';
+    if (UPDATING) return;
+    UPDATING = true; renderServer();
     try{ await fetch('/api/update', {method:'POST'}); }catch(e){}
     setTimeout(() => location.reload(), 30000);
   };
@@ -2386,7 +2388,7 @@ function renderServer(){
 if (IS_ENGINE){
   /* the server runs the bot here; nobody looks at this copy of the page, so skip drawing it */
   render = renderFeed = renderStatus = renderStats = renderOpen = renderJournal = renderRejects = renderChart = renderHealth =
-    renderBanners = renderMode = renderStrat = renderWhatIf = renderBlacklist = function(){};
+    renderBanners = renderMode = renderStrat = renderWhatIf = renderBlacklist = renderStudy = renderLife = function(){};
 }
 applyTheme(store.get('theme'));
 if (IS_REMOTE){

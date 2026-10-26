@@ -50,6 +50,7 @@ const dom = new JSDOM(html, {
 });
 const W = dom.window;
 const UP_SINCE = Date.now();
+let lastUpdate = 0;
 
 function persist(){
   try{
@@ -111,6 +112,9 @@ http.createServer(async (req, res) => {
       return res.end(JSON.stringify(W.eval('exportData()')));
     }
     if (req.method === 'POST' && url === '/api/update'){
+      /* ignore repeat taps: several restarts in a row made systemd give up and leave the bot off */
+      if (Date.now() - lastUpdate < 120000) return json(res, 200, {ok:true, already:true});
+      lastUpdate = Date.now();
       json(res, 200, {ok:true});
       persist();
       execFile('systemd-run', ['--collect', '--unit=coin-scout-update-' + Date.now(), '/bin/bash', path.join(DIR, 'update.sh')], err => { if (err) console.error('update failed to start:', err.message); });
