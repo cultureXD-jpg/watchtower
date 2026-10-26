@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v25 · Oct 23';
+const VERSION = 'v26 · Oct 26';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1472,6 +1472,9 @@ async function chartCheck(m){
   if (CFG.useChart === false) return {ok:true};
   /* these work even before the coin has candles */
   if (m.ch5m >= 60) return {ok:false, key:'Chart: just spiked', detail:'up ' + Math.round(m.ch5m) + '% in the last 5 min'};
+  /* trades bought while the coin was up 3-20% in the last 5 minutes lost 20 of 24 times (Oct 22-26);
+     cooling-off coins (0-3%) and strong breakouts (20-60%) both did better */
+  if (m.ch5m > 3 && m.ch5m <= 20) return {ok:false, key:'Chart: in-between move', detail:'up ' + Math.round(m.ch5m) + '% in the last 5 min (this range has mostly lost)'};
   const n = (m.buys1h || 0) + (m.sells1h || 0);
   if (n >= 500 && m.vol1h / n < 10) return {ok:false, key:'Trading looks fake', detail:'average trade only $' + (m.vol1h / n).toFixed(2) + ' across ' + n.toLocaleString() + ' trades (volume bots)'};
   if (!m.pair) return {ok:false, key:'Chart: no chart data yet', detail:'no pool address yet'};
