@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v28 · Oct 26';
+const VERSION = 'v29 · Oct 27';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -667,6 +667,18 @@ const MARKET = new Map(), TA = new Map(), TXS = new Map();
 
 let nextSlot = 0, GAP = 350, okStreak = 0;
 async function pace(){ const t = now(), at = Math.max(t, nextSlot); nextSlot = at + GAP; if (at > t) await sleep(at - t); }
+/* on the server, Helius slow-downs and out-of-credits go to the system log (journalctl -u coin-scout),
+   summed up at most once a minute per kind so a busy spell doesn't flood it */
+const HEL_LOG = {};
+function helLog(kind, method, msg){
+  if (!IS_ENGINE) return;
+  const L = HEL_LOG[kind] = HEL_LOG[kind] || {n:0, t:0};
+  L.n++; L.last = method + ': ' + String(msg || '').replace(/api-key=[^&\s"]+/gi, 'api-key=***').slice(0, 200);
+  if (now() - L.t < 60000) return;
+  const what = kind === 'credits' ? 'Helius out of credits' : 'Helius rate limit (429)';
+  (kind === 'credits' ? console.error : console.warn)(what + ' x' + L.n + (L.t ? ' in the last ' + Math.round((now() - L.t) / 1000) + 's' : '') + ', latest ' + L.last);
+  L.n = 0; L.t = now();
+}
 const URL_RPC = () => 'https://mainnet.helius-rpc.com/?api-key=' + encodeURIComponent(CFG.heliusKey);
 async function post(body){
   const method = Array.isArray(body) ? (body[0] && body[0].method) + ' ×' + body.length : body.method;
@@ -684,7 +696,8 @@ async function post(body){
       (Array.isArray(j) && j.some(x => x && x.error && /rate.?limit|too many|limit exceeded/i.test(x.error.message || '')));
     if (limited){
       lastMsg = errMsg || txt.slice(0, 200) || 'HTTP ' + r.status;
-      if (/credit|quota|exceeded your/i.test(lastMsg)) throw new UserError('Your Helius plan is out of credits for now: ' + lastMsg);
+      if (/credit|quota|exceeded your/i.test(lastMsg)){ helLog('credits', method, lastMsg); throw new UserError('Your Helius plan is out of credits for now: ' + lastMsg); }
+      helLog('429', method, lastMsg);
       GAP = Math.min(3000, Math.round(GAP * 1.7)); okStreak = 0;
       if (!Array.isArray(body) && body.method === 'getTransactionsForAddress' && a >= 2){ const e = new Error('limited: ' + lastMsg); e.code = -32601; throw e; }
       const ra = parseFloat(r.headers.get('retry-after'));
