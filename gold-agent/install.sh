@@ -44,6 +44,30 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF2
+cat > /etc/systemd/system/gold-intraday.service <<EOF2
+[Unit]
+Description=Gold Agent: save the day's 1-minute GLD bars
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=3h
+StartLimitBurst=5
+[Service]
+Type=oneshot
+Restart=on-failure
+RestartSec=15min
+Environment=GOLD_HOME=$DATA
+WorkingDirectory=$APP
+ExecStart=$APP/.venv/bin/python $APP/gold_intraday.py
+EOF2
+cat > /etc/systemd/system/gold-intraday.timer <<EOF2
+[Unit]
+Description=Gold Agent: record the day's minute bars at 1:45 PM Pacific (after the close)
+[Timer]
+OnCalendar=Mon..Fri 13:45:00 America/Los_Angeles
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF2
 cat > /etc/systemd/system/gold-viewer.service <<EOF2
 [Unit]
 Description=Gold Agent: diary page
@@ -60,6 +84,7 @@ EOF2
 
 systemctl daemon-reload
 systemctl enable --now gold-diary.timer >/dev/null 2>&1
+systemctl enable --now gold-intraday.timer >/dev/null 2>&1
 systemctl enable gold-viewer >/dev/null 2>&1
 systemctl restart gold-viewer
 [ -s "$DATA/.env" ] || bash "$APP/keys.sh"

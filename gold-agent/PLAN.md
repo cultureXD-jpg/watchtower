@@ -48,7 +48,7 @@ A loop of five parts sharing one permanent memory:
 ## Next steps
 
 1. [x] Verify the Oct 23 row and the Oct 28 "Fed decision" event. (Both verified Oct 28.)
-2. [ ] Intraday watcher: record GLD every 1-5 min during market hours (Alpaca free minute data).
+2. [ ] Intraday watcher: record GLD every 1-5 min during market hours (Alpaca free minute data). After-close recorder live Oct 28: every 1-min bar (all exchanges) saved daily at 1:45 PM PT to intraday/GLD_YYYY-MM-DD.csv. Still open: backfill past days; live recording when the paper trader needs it.
 3. [ ] Setup catalog: trends, support/resistance, moving averages, RSI, volume, breakouts. Test each on history; keep only what works.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
