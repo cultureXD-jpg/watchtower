@@ -54,6 +54,7 @@ A loop of five parts sharing one permanent memory:
    - [x] Opening-range breakout (15 min, stop at other side, 2R target): **failed.** 167 trades, 43% wins, +0.005R average (break-even), worst drop -24.5R. Not kept. (setups/backtest_orb.py)
    - [x] VWAP trend pullback (30-min trend vs VWAP, buy the bounce off VWAP, stop at pullback low, 2R target): **failed.** 85 trades, 21% wins, -0.415R average, worst drop -44R. Tight stops (~$0.61) get shaken out by normal noise. Not kept. (setups/backtest_vwap_pullback.py)
    - [x] Opening-range fade (buy in the bottom 10% / sell in the top 10% while the range holds, stop 1/4 width outside, target the middle): **failed.** 121 trades, 46% wins, -0.149R average, worst drop -20R. Longs alone were +0.096R on 49 trades: too few and picked after the fact, so not a pass. Not kept. (setups/backtest_orb_fade.py)
+   - [ ] Trend day (first-hour move of 0.5%+, trade that way at 10:30, stop at the first hour's other extreme, hold to close): **technically passes the measuring bar, but weakly.** 47 trades, 49% wins, +0.037R average, worst drop -3.3R. Statistically indistinguishable from zero (t = 0.29). Unseen check pending Daniel's go-ahead. (setups/backtest_trend_day.py)
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
