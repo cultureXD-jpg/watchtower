@@ -50,6 +50,8 @@ A loop of five parts sharing one permanent memory:
 1. [x] Verify the Oct 23 row and the Oct 28 "Fed decision" event. (Both verified Oct 28.)
 2. [ ] Intraday watcher: record GLD every 1-5 min during market hours (Alpaca free minute data). After-close recorder live Oct 28: every 1-min bar (all exchanges) saved daily at 1:45 PM PT to intraday/GLD_YYYY-MM-DD.csv. Backfilled Oct 28 2025 - Oct 28 2026: 252 days, no missing minutes (2 half days). Still open: live recording when the paper trader needs it.
 3. [ ] Setup catalog: trends, support/resistance, moving averages, RSI, volume, breakouts. Test each on history; keep only what works.
+   - Test rules (agreed Oct 28): measure on Oct 2025-Jun 2026, keep Jul-Oct 2026 unseen; every trade has a stop, target and 4 PM exit; results in R after $0.02/share costs; pass = 30+ trades, positive average R, and still positive on the unseen months.
+   - [x] Opening-range breakout (15 min, stop at other side, 2R target): **failed.** 167 trades, 43% wins, +0.005R average (break-even), worst drop -24.5R. Not kept. (setups/backtest_orb.py)
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
