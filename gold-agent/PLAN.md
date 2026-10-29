@@ -47,7 +47,7 @@ A loop of five parts sharing one permanent memory:
 
 ## Next steps
 
-1. [ ] Verify the Oct 23 row and the Oct 28 "Fed decision" event. (Oct 23 verified Oct 28.)
+1. [x] Verify the Oct 23 row and the Oct 28 "Fed decision" event. (Both verified Oct 28.)
 2. [ ] Intraday watcher: record GLD every 1-5 min during market hours (Alpaca free minute data).
 3. [ ] Setup catalog: trends, support/resistance, moving averages, RSI, volume, breakouts. Test each on history; keep only what works.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
