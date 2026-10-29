@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v31 · Oct 28';
+const VERSION = 'v32 · Oct 28';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -1653,6 +1653,8 @@ function watchdog(){
     if (stalled && !stallWarned){ stallWarned = true; tg('⚠️ <b>Coin Scout hasn’t found new coins for 10 minutes.</b> It keeps trying on its own. Open the page to see what’s wrong.'); }
     if (!stalled && stallWarned){ stallWarned = false; tg('✅ Coin Scout is finding new coins again.'); }
     if (DEEP_OFF && S.lastDeepOffWarn !== DEEP_OFF){ S.lastDeepOffWarn = DEEP_OFF; tg('⚠️ <b>Helius stopped working:</b> ' + esc(DEEP_OFF)); }
+    /* clear the warning once Helius answers again, so the same problem next month warns again */
+    if (!DEEP_OFF && S.lastDeepOffWarn && HEALTH.hel === 'ok'){ S.lastDeepOffWarn = ''; save(); tg('✅ Helius is working again. Deep checks are back on.'); }
   }
 }
 
