@@ -60,7 +60,8 @@ A loop of five parts sharing one permanent memory:
      - **Correction: gold is not near its record now.** GLD peaked at $495.90 on Jan 29, 2026 and closed at $373.51 on Oct 28, 2026 (24.7% below the record and 9.7% below its 200-day average). Today's mood is Flat.
      - Since 2016: Hot 38% of days (0.95% daily range, 10% of days move 1%+ open to close), Cooling 23% (1.10%, 13%), Flat 34% (0.77%, 6%), Falling 5% (0.68%, 5%). Flat days give a day trader about half as many big moves as Hot or Cooling days.
      - Our minute data is two moods, not one: the measuring period (Oct 2025 - Jun 2026) was 55 Hot + 113 Cooling days; the unseen months (Jul - Oct 2026) were 55 Cooling + 29 Flat. So the unseen check is also a test in a calmer market.
-     - Next: give the agent the daily mood label, and report setup results per mood.
+     - [x] Mood label wired in (Oct 28): rules live in mood.py. The diary has a new Mood column (old rows backfilled), refreshed daily from Alpaca. Every setup test now tags each trade with the previous day's mood (known before the open) and shows results per mood.
+     - Per mood, measuring period: ORB Hot -0.163R (54) / Cooling +0.085R (113); VWAP pullback Hot -0.658R (30) / Cooling -0.282R (55); ORB fade Hot +0.023R (37) / Cooling -0.225R (84); trend day Hot +0.069R (16) / Cooling +0.021R (31). No setup is clearly good in any mood; the samples per mood are small, so don't pick a mood after the fact (same overfitting rule).
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.

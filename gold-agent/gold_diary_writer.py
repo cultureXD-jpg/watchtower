@@ -12,6 +12,7 @@ import requests
 import sys
 import time
 from config import API_KEY, SECRET_KEY, FRED_KEY, GOLD_HOME
+from mood import moods
 
 TZ = ZoneInfo("America/Los_Angeles")
 trading = TradingClient(API_KEY, SECRET_KEY, paper=True)
@@ -87,16 +88,27 @@ if today in fed_days:
 events = ", ".join(happened) if happened else "none"
 now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
 os.makedirs(os.path.dirname(diary), exist_ok=True)
-header = ["Timestamp", "Gold Price (GLD)", "Gold Direction", "Gold Change ($)", "Dollar Direction", "Inflation (CPI)", "Events"]
+old_header = ["Timestamp", "Gold Price (GLD)", "Gold Direction", "Gold Change ($)", "Dollar Direction", "Inflation (CPI)", "Events"]
+header = old_header + ["Mood"]
+
+# Market mood (Hot / Cooling / Flat / Falling, rules in mood.py). A failure here must not stop the diary.
+try:
+    mood_by_day = moods(refresh=True)
+except Exception as e:
+    print("Mood unavailable:", e)
+    mood_by_day = {}
 
 rows = []
 if os.path.exists(diary):
     with open(diary) as f:
         rows = [r for r in csv.reader(f) if r]
+if rows and rows[0] == old_header:
+    # one-time upgrade: add the Mood column to existing rows
+    rows = [header] + [r + [mood_by_day.get(r[0][:10], "")] for r in rows[1:]]
 if not rows or rows[0] != header:
     rows.insert(0, header)
 
-new_row = [now, price, direction, amount, dollar_direction, inflation, events]
+new_row = [now, price, direction, amount, dollar_direction, inflation, events, mood_by_day.get(today, "?")]
 
 if rows and rows[-1][0].startswith(today):
     rows[-1] = new_row
@@ -106,4 +118,4 @@ else:
 with open(diary, "w") as f:
     csv.writer(f).writerows(rows)
 
-print("Wrote:", now, "gold", price, direction, amount, "| dollar", dollar_direction, "| inflation", inflation)
+print("Wrote:", now, "gold", price, direction, amount, "| dollar", dollar_direction, "| inflation", inflation, "| mood", new_row[-1])

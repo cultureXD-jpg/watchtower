@@ -6,10 +6,15 @@
 #   - Anything still open is closed at the last bar's close (no overnight holds).
 #   - Costs: $0.02/share round trip, taken off every trade.
 #   - Measure on Oct 2025 - Jun 2026 only. Jul - Oct 2026 stays unseen until a setup passes.
+#   - Each trade is tagged with the previous day's mood (known before the open), and results
+#     are also shown per mood.
 import csv
 import glob
 import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from mood import MOODS, moods
 
 GOLD_HOME = os.environ.get("GOLD_HOME", "/var/lib/gold-agent")
 SPLIT = "2026-07-01"          # first unseen day
@@ -70,6 +75,10 @@ def summary(name, trades):
         s = [t["r"] for t in trades if t["side"] == side]
         if s:
             print(f"   {side:5}: {len(s)} trades, average {sum(s) / len(s):+.3f}R")
+    for m in MOODS:
+        s = [t["r"] for t in trades if t.get("mood") == m]
+        if s:
+            print(f"   {m:7}: {len(s)} trades, average {sum(s) / len(s):+.3f}R")
     avg_risk = sum(t["risk"] for t in trades) / len(trades)
     print(f"   average risk per share ${avg_risk:.2f} (costs are ${COST:.2f}, so about "
           f"{COST / avg_risk:.2f}R per trade)")
@@ -79,10 +88,14 @@ def run(trade_day):
     """Run a setup's trade_day(bars) over every saved day and print the results."""
     show_unseen = "--unseen" in sys.argv
     measure, unseen = [], []
+    mood_by_day = moods()
+    days = sorted(mood_by_day)
+    prev = {d: mood_by_day[days[i - 1]] for i, d in enumerate(days) if i}
     for day, bars in load_days():
         t = trade_day(bars)
         if t:
             t["day"] = day
+            t["mood"] = prev.get(day)
             (measure if day < SPLIT else unseen).append(t)
     summary("Measuring period (Oct 2025 - Jun 2026)", measure)
     if show_unseen:
