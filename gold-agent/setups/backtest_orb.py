@@ -1,37 +1,17 @@
 # GOLD AGENT: setup test #1, opening-range breakout (ORB) on 1-minute GLD bars.
+# Result Oct 28, 2026: break-even (167 trades, +0.005R average). Not kept.
 #
-# Rules (agreed Oct 28, 2026):
+# Rules (shared test rules are in common.py):
 #   - Opening range = high/low of the first 15 minutes (9:30-9:44 ET).
 #   - First 1-minute close above the range high -> buy; below the range low -> sell short.
-#     Fill at the next bar's open. One trade per day. No new entries after 15:00 ET.
-#   - Stop = the other side of the range. 1R = entry-to-stop distance.
-#   - Target = 2R. If stop and target are both touched in the same minute, count the stop.
-#   - Anything still open is closed at the last bar's close (no overnight holds).
-#   - Costs: $0.02/share round trip, taken off every trade.
-#   - Measure on Oct 2025 - Jun 2026 only. Jul - Oct 2026 stays unseen until a setup passes.
+#   - Stop = the other side of the range. Target = 2R.
 #
 # Usage: backtest_orb.py            -> measuring period only
 #        backtest_orb.py --unseen   -> also the unseen months (only once a setup has passed)
-import csv
-import glob
-import os
-import sys
+from common import LAST_ENTRY, run, simulate
 
-GOLD_HOME = os.environ.get("GOLD_HOME", "/var/lib/gold-agent")
-SPLIT = "2026-07-01"          # first unseen day
 OR_MINUTES = 15
 TARGET_R = 2.0
-COST = 0.02
-LAST_ENTRY = "15:00"
-
-
-def load_days():
-    for path in sorted(glob.glob(os.path.join(GOLD_HOME, "intraday", "GLD_*.csv"))):
-        with open(path) as f:
-            rows = list(csv.DictReader(f))
-        bars = [{"t": r["Time (ET)"][11:], "o": float(r["Open"]), "h": float(r["High"]),
-                 "l": float(r["Low"]), "c": float(r["Close"])} for r in rows]
-        yield os.path.basename(path)[4:14], bars
 
 
 def trade_day(bars):
@@ -45,64 +25,8 @@ def trade_day(bars):
         c = bars[i]["c"]
         if c > hi or c < lo:
             side = 1 if c > hi else -1
-            entry = bars[i + 1]["o"]
-            stop = lo if side == 1 else hi
-            risk = (entry - stop) * side
-            if risk <= 0:            # opened past the stop already
-                return None
-            target = entry + side * TARGET_R * risk
-            exit_px, why = bars[-1]["c"], "close"
-            for b in bars[i + 1:]:
-                hit_stop = b["l"] <= stop if side == 1 else b["h"] >= stop
-                hit_tgt = b["h"] >= target if side == 1 else b["l"] <= target
-                if hit_stop:
-                    exit_px, why = stop, "stop"
-                    break
-                if hit_tgt:
-                    exit_px, why = target, "target"
-                    break
-            pnl = (exit_px - entry) * side - COST
-            return {"side": "long" if side == 1 else "short", "entry": entry, "risk": risk,
-                    "r": pnl / risk, "why": why, "time": bars[i + 1]["t"]}
+            return simulate(bars, i, side, lo if side == 1 else hi, TARGET_R)
     return None
 
 
-def summary(name, trades):
-    if not trades:
-        print(f"{name}: no trades")
-        return
-    rs = [t["r"] for t in trades]
-    wins = sum(r > 0 for r in rs)
-    total = sum(rs)
-    # worst run of losses, in R, from a running peak
-    peak = run = dd = 0.0
-    for r in rs:
-        run += r
-        peak = max(peak, run)
-        dd = min(dd, run - peak)
-    exits = {k: sum(t["why"] == k for t in trades) for k in ("target", "stop", "close")}
-    print(f"{name}: {len(trades)} trades | win rate {wins / len(trades):.0%} | "
-          f"average {total / len(trades):+.3f}R | total {total:+.1f}R | worst drop {dd:.1f}R | "
-          f"exits: {exits['target']} target, {exits['stop']} stop, {exits['close']} at close")
-    for side in ("long", "short"):
-        s = [t["r"] for t in trades if t["side"] == side]
-        if s:
-            print(f"   {side:5}: {len(s)} trades, average {sum(s) / len(s):+.3f}R")
-    avg_risk = sum(t["risk"] for t in trades) / len(trades)
-    print(f"   average risk per share ${avg_risk:.2f} (costs are ${COST:.2f}, so about "
-          f"{COST / avg_risk:.2f}R per trade)")
-
-
-show_unseen = "--unseen" in sys.argv
-measure, unseen = [], []
-for day, bars in load_days():
-    t = trade_day(bars)
-    if t:
-        t["day"] = day
-        (measure if day < SPLIT else unseen).append(t)
-
-summary("Measuring period (Oct 2025 - Jun 2026)", measure)
-if show_unseen:
-    summary("Unseen period (Jul - Oct 2026)", unseen)
-else:
-    print(f"Unseen period: {len(unseen)} trades, results hidden until the setup passes.")
+run(trade_day)

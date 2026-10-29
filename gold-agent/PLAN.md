@@ -52,6 +52,7 @@ A loop of five parts sharing one permanent memory:
 3. [ ] Setup catalog: trends, support/resistance, moving averages, RSI, volume, breakouts. Test each on history; keep only what works.
    - Test rules (agreed Oct 28): measure on Oct 2025-Jun 2026, keep Jul-Oct 2026 unseen; every trade has a stop, target and 4 PM exit; results in R after $0.02/share costs; pass = 30+ trades, positive average R, and still positive on the unseen months.
    - [x] Opening-range breakout (15 min, stop at other side, 2R target): **failed.** 167 trades, 43% wins, +0.005R average (break-even), worst drop -24.5R. Not kept. (setups/backtest_orb.py)
+   - [x] VWAP trend pullback (30-min trend vs VWAP, buy the bounce off VWAP, stop at pullback low, 2R target): **failed.** 85 trades, 21% wins, -0.415R average, worst drop -44R. Tight stops (~$0.61) get shaken out by normal noise. Not kept. (setups/backtest_vwap_pullback.py)
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
