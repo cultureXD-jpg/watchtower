@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v30 · Oct 28';
+const VERSION = 'v31 · Oct 28';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -367,7 +367,8 @@ const FIELDS = [
   {k:'maxLinked', l:'Linked wallet groups can hold at most', u:'%', d:10},
   {k:'maxCreatorGroup', l:"Creator's group can hold at most", u:'%', d:3},
   {k:'maxBundled', l:'Skip if at least this many wallets bought in the launch block', d:2},
-  {k:'deepPerHour', l:'Most deep checks per hour', d:8, h:'Each one uses Helius credits.'},
+  {k:'deepPerHour', l:'Most deep checks per hour', d:4, h:'Each one uses Helius credits.'},
+  {k:'studyPerHour', l:'Most wallet studies per hour', d:5, h:'Learns which wallets buy early into runners and flops. Each one uses Helius credits.'},
   {g:'Deployer blacklist', k:'blAuto', l:'Blacklist deployers automatically', t:'check', d:true, h:'A coin that clearly rugs gets its deployer blacklisted right away.'},
   {k:'blStrikes', l:'Also blacklist a deployer after this many of their coins crash 90%+', d:2},
   {k:'blFunders', l:'Also blacklist whoever funded a blacklisted deployer', t:'check', d:true, h:'Needs your Helius key. Exchanges are left out.'},
@@ -389,6 +390,8 @@ const PRESETS = {
 let CFG = Object.assign({}, DEF, store.get('cfg') || {});
 /* v15: trades in pools under $25K lost 8 of 9 times, so raise the old $15K minimum once (a later change in Settings is kept) */
 if (!CFG._v15liq){ if (!(+CFG.minLiq >= 25000)) CFG.minLiq = 25000; CFG._v15liq = true; if (!IS_REMOTE) store.set('cfg', CFG); }
+/* v31: the free Helius plan (1M credits a month) ran out in 17 days, so halve deep checks once (a later change in Settings is kept) */
+if (!CFG._v31credits){ if (+CFG.deepPerHour > 4) CFG.deepPerHour = 4; CFG._v31credits = true; if (!IS_REMOTE) store.set('cfg', CFG); }
 
 /* ---------------- state ---------------- */
 function fresh(){
@@ -2026,7 +2029,7 @@ function flowDot(el, e){
    It does the same for coins that crashed, so wallets that buy everything early
    (sniper bots) don't look smart. Wallets early on several winners and few flops rise to the top.
    ===================================================================== */
-const STUDY = {RUNNER:3, PER_HOUR:20, BUYERS:30, TIME_LIMIT:60000, MAX_WALLETS:6000};
+const STUDY = {RUNNER:3, BUYERS:30, TIME_LIMIT:60000, MAX_WALLETS:6000};
 function studyAdd(c, kind){
   const st = S.study;
   if (c.studied || st.done[c.mint] || st.queue.some(q => q.mint === c.mint)) return;
@@ -2057,7 +2060,7 @@ async function studyStep(){
   const st = S.study;
   if (studying || DEEP.running || !CFG.heliusKey || DEEP_OFF || !st.queue.length) return;
   st.times = (st.times || []).filter(t => now() - t < 3600e3);
-  if (st.times.length >= STUDY.PER_HOUR) return;
+  if (st.times.length >= CFG.studyPerHour) return;
   st.queue.sort((a, b) => (a.kind === 'runner' ? 0 : 1) - (b.kind === 'runner' ? 0 : 1));
   const q = st.queue.shift(); if (!q) return;
   studying = true; DEEP.running = 'study'; DEEP.abort = false; st.times.push(now());
@@ -2218,7 +2221,7 @@ function doSettings(n){
   for (const k of SECRETS) if (!n[k] && old[k] && n._keepKey) n[k] = old[k];
   if (n.tgToken !== old.tgToken){ if (!n.tgChat || n.tgToken !== old.tgToken) n.tgChat = n.tgToken === old.tgToken ? n.tgChat : ''; tgFound = false; }
   delete n._keepKey;
-  CFG = Object.assign({}, DEF, n, {_v15liq:true}); store.set('cfg', CFG);
+  CFG = Object.assign({}, DEF, n, {_v15liq:true, _v31credits:true}); store.set('cfg', CFG);
   if (CFG.heliusKey !== old.heliusKey){ DEEP_OFF = ''; MODE = 'gtfa'; HEALTH.hel = null; }
   if (CFG.startCash !== old.startCash && !S.trades.length && !S.positions.length){ S.cash = S.start = +CFG.startCash; S.equity = [[now(), S.start]]; }
   save(); render();
