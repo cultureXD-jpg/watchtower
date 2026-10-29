@@ -62,6 +62,12 @@ A loop of five parts sharing one permanent memory:
      - Our minute data is two moods, not one: the measuring period (Oct 2025 - Jun 2026) was 55 Hot + 113 Cooling days; the unseen months (Jul - Oct 2026) were 55 Cooling + 29 Flat. So the unseen check is also a test in a calmer market.
      - [x] Mood label wired in (Oct 28): rules live in mood.py. The diary has a new Mood column (old rows backfilled), refreshed daily from Alpaca. Every setup test now tags each trade with the previous day's mood (known before the open) and shows results per mood.
      - Per mood, measuring period: ORB Hot -0.163R (54) / Cooling +0.085R (113); VWAP pullback Hot -0.658R (30) / Cooling -0.282R (55); ORB fade Hot +0.023R (37) / Cooling -0.225R (84); trend day Hot +0.069R (16) / Cooling +0.021R (31). No setup is clearly good in any mood; the samples per mood are small, so don't pick a mood after the fact (same overfitting rule).
+   - [x] Ten years of minute data (Oct 29): GLD 1-minute bars backfilled from Jan 4, 2016, so every market day since then is saved (2,721 days, 75 MB, no failures; the short days are half days plus a few days with 10-30 missing minutes). The measuring period is now Jan 2016 - Jun 2026; Jul - Oct 2026 stays unseen. Tests now also print a t-value (about 2 or more = unlikely to be luck).
+     - ORB: 2,623 trades, +0.003R, t 0.14. No edge.
+     - VWAP pullback: 1,124 trades, -0.268R, t -6.3. Reliably loses, in every mood.
+     - ORB fade: 1,909 trades, -0.217R, t -9.0. Reliably loses, in every mood.
+     - Trend day: 320 trades, +0.045R, t 1.06, worst drop -8.2R. Still slightly positive over 10 years, but could be luck. Longs +0.092R (151), shorts +0.003R (169). By mood: Hot +0.006R (132), Cooling +0.074R (85), Flat +0.030R (67), Falling -0.088R (11).
+     - **Bottom line: none of the 4 setups has a proven edge.** The one-year results were not misleading, just too small to tell. Next: new setup ideas, judged on all 10 years and per mood, with rules fixed before the first run.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.

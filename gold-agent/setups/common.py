@@ -5,11 +5,12 @@
 #   - 1R = entry-to-stop distance. If stop and target are both touched in the same minute, count the stop.
 #   - Anything still open is closed at the last bar's close (no overnight holds).
 #   - Costs: $0.02/share round trip, taken off every trade.
-#   - Measure on Oct 2025 - Jun 2026 only. Jul - Oct 2026 stays unseen until a setup passes.
+#   - Measure on Jan 2016 - Jun 2026 only. Jul - Oct 2026 stays unseen until a setup passes.
 #   - Each trade is tagged with the previous day's mood (known before the open), and results
 #     are also shown per mood.
 import csv
 import glob
+import statistics
 import os
 import sys
 
@@ -71,6 +72,9 @@ def summary(name, trades):
     print(f"{name}: {len(trades)} trades | win rate {wins / len(trades):.0%} | "
           f"average {total / len(trades):+.3f}R | total {total:+.1f}R | worst drop {dd:.1f}R | "
           f"exits: {exits['target']} target, {exits['stop']} stop, {exits['close']} at close")
+    if len(rs) > 1:
+        # t-value: about 2 or more means the average is unlikely to be luck
+        print(f"   t-value {statistics.mean(rs) / (statistics.stdev(rs) / len(rs) ** 0.5):.2f}")
     for side in ("long", "short"):
         s = [t["r"] for t in trades if t["side"] == side]
         if s:
@@ -97,7 +101,7 @@ def run(trade_day):
             t["day"] = day
             t["mood"] = prev.get(day)
             (measure if day < SPLIT else unseen).append(t)
-    summary("Measuring period (Oct 2025 - Jun 2026)", measure)
+    summary("Measuring period (Jan 2016 - Jun 2026)", measure)
     if show_unseen:
         summary("Unseen period (Jul - Oct 2026)", unseen)
     else:
