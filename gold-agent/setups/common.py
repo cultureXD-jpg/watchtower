@@ -92,11 +92,12 @@ def run(trade_day):
     """Run a setup's trade_day(bars) over every saved day and print the results."""
     show_unseen = "--unseen" in sys.argv
     measure, unseen = [], []
+    wants_day = trade_day.__code__.co_argcount == 2
     mood_by_day = moods()
     days = sorted(mood_by_day)
     prev = {d: mood_by_day[days[i - 1]] for i, d in enumerate(days) if i}
     for day, bars in load_days():
-        t = trade_day(bars)
+        t = trade_day(bars, day) if wants_day else trade_day(bars)
         if t:
             t["day"] = day
             t["mood"] = prev.get(day)

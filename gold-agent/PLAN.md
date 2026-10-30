@@ -68,6 +68,12 @@ A loop of five parts sharing one permanent memory:
      - ORB fade: 1,909 trades, -0.217R, t -9.0. Reliably loses, in every mood.
      - Trend day: 320 trades, +0.045R, t 1.06, worst drop -8.2R. Still slightly positive over 10 years, but could be luck. Longs +0.092R (151), shorts +0.003R (169). By mood: Hot +0.006R (132), Cooling +0.074R (85), Flat +0.030R (67), Falling -0.088R (11).
      - **Bottom line: none of the 4 setups has a proven edge.** The one-year results were not misleading, just too small to tell. Next: new setup ideas, judged on all 10 years and per mood, with rules fixed before the first run.
+   - [x] Round 2 setups (Oct 30), rules fixed before the first run, measured on Jan 2016 - Jun 2026. Pass bar raised: positive average with t-value 2+, not reliant on one mood, still positive on the unseen months. **None passed, so the unseen months stay unspent.**
+     - Last-hour follow-through (backtest_last_hour.py): 604 trades, +0.003R, t 0.17. No edge.
+     - Breakout after a quiet day (backtest_quiet_breakout.py): 402 trades, -0.039R, t -0.66. No edge.
+     - Overnight gap (backtest_gap.py): 1,019 trades, -0.014R, t -0.20. No edge.
+     - Dollar disagreement (backtest_dollar.py, UUP minute bars in GOLD_HOME/uup via fetch_uup.py): 71 trades, +0.055R, t 0.45. Too few trades and no edge.
+     - **8 setups tested so far, none with a proven edge.** Simple price patterns on GLD alone do not look like enough. Open question for Daniel: what to try next.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
