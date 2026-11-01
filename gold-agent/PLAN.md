@@ -74,6 +74,11 @@ A loop of five parts sharing one permanent memory:
      - Overnight gap (backtest_gap.py): 1,019 trades, -0.014R, t -0.20. No edge.
      - Dollar disagreement (backtest_dollar.py, UUP minute bars in GOLD_HOME/uup via fetch_uup.py): 71 trades, +0.055R, t 0.45. Too few trades and no edge.
      - **8 setups tested so far, none with a proven edge.** Simple price patterns on GLD alone do not look like enough. Open question for Daniel: what to try next.
+   - [x] Behavior study (Oct 31, setups/behavior.py, 2,610 full days, Jan 2016 - Jun 2026, no costs, unseen months untouched):
+     - **Gold's gains came overnight.** Close to open averaged +0.058% a night (t 3.84), about +151% added up. Open to close averaged -0.003% a day (t -0.26), about -8% added up. This is close to simply holding gold through a rising decade, so it is not yet a proven edge. Overnight was +0.083% in Hot, +0.065% in Cooling, +0.132% in Falling, and only +0.006% in Flat (today's mood).
+     - **Moves are biggest in the morning.** A half hour moves about 0.18% at 9:30 and about 0.08-0.09% from 12:30 on. Volume is highest at 9:30 (14%) and 15:30 (13%).
+     - **Daytime direction looks close to a coin flip.** Earlier moves barely predict later ones (same way 49-52%, correlations under 0.06 either way). After a 0.5%+ half hour, the next half hour carries on 44-54% of the time, with no reliable average. No day of the week stands out.
+     - Two half hours reached |t| of 2 (9:30 -2.01, 13:30 +2.34). With this many numbers that is expected by chance, so neither is treated as a finding.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
