@@ -18,19 +18,22 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from mood import MOODS, moods
 
 GOLD_HOME = os.environ.get("GOLD_HOME", "/var/lib/gold-agent")
+SYMBOL = os.environ.get("GOLD_SYMBOL", "GLD")   # other markets are saved in GOLD_HOME/markets
+FOLDER = "intraday" if SYMBOL == "GLD" else "markets"
+MID = "2021-04-01"            # splits the measuring period into two halves
 SPLIT = "2026-07-01"          # first unseen day
 COST = 0.02
 LAST_ENTRY = "15:00"
 
 
 def load_days():
-    for path in sorted(glob.glob(os.path.join(GOLD_HOME, "intraday", "GLD_*.csv"))):
+    for path in sorted(glob.glob(os.path.join(GOLD_HOME, FOLDER, f"{SYMBOL}_*.csv"))):
         with open(path) as f:
             rows = list(csv.DictReader(f))
         bars = [{"t": r["Time (ET)"][11:], "o": float(r["Open"]), "h": float(r["High"]),
                  "l": float(r["Low"]), "c": float(r["Close"]), "v": float(r["Volume"]),
                  "vwap": float(r["VWAP"]) if r["VWAP"] else float(r["Close"])} for r in rows]
-        yield os.path.basename(path)[4:14], bars
+        yield os.path.basename(path)[len(SYMBOL) + 1:-4], bars
 
 
 def simulate(bars, i, side, stop, target_r):
@@ -75,6 +78,10 @@ def summary(name, trades):
     if len(rs) > 1:
         # t-value: about 2 or more means the average is unlikely to be luck
         print(f"   t-value {statistics.mean(rs) / (statistics.stdev(rs) / len(rs) ** 0.5):.2f}")
+    early = [t["r"] for t in trades if t["day"] < MID]
+    late = [t["r"] for t in trades if t["day"] >= MID]
+    if early and late:
+        print(f"   halves {statistics.mean(early):+.3f}R {statistics.mean(late):+.3f}R")
     for side in ("long", "short"):
         s = [t["r"] for t in trades if t["side"] == side]
         if s:
@@ -93,7 +100,7 @@ def run(trade_day):
     show_unseen = "--unseen" in sys.argv
     measure, unseen = [], []
     wants_day = trade_day.__code__.co_argcount == 2
-    mood_by_day = moods()
+    mood_by_day = moods() if SYMBOL == "GLD" else {}   # moods describe gold only
     days = sorted(mood_by_day)
     prev = {d: mood_by_day[days[i - 1]] for i, d in enumerate(days) if i}
     for day, bars in load_days():
