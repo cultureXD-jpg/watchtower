@@ -82,6 +82,10 @@ A loop of five parts sharing one permanent memory:
    - [x] Overnight hold test (Oct 31, setups/backtest_overnight.py, Jan 2016 - Jun 2026, unseen months untouched). Compounded totals: hold gold +258% (13.0% a year, worst drop -26%, return/risk 0.84); overnight at $0.02 a night +190% (10.7% a year, worst drop -18%, return/risk 0.89, t 2.87); overnight at $0.05 a night +77% (5.6% a year, return/risk 0.51, t 1.64); daytime at $0.02 -36%.
      - **Not a clear win over holding gold.** It technically edges holding on return/risk, but by a tiny margin (no formal test of the difference), it earns less in total, and three extra cents of cost a night drop return/risk well below holding. It did lose less at its worst. After costs it was about flat in Flat markets (-0.008% a night, today's mood).
      - Not adopted. Unseen months not used. Day trading stays the goal unless Daniel decides otherwise.
+   - [x] Morning study (Oct 31, setups/morning.py, 9:30-11:30 ET, Jan 2016 - Jun 2026, unseen months untouched):
+     - **Direction: nothing usable.** 15 signals followed to 11:30, bar set at |t| 3+ with the same sign in both halves of the period. None reached it. Wins were 46-50%. The best, following the overnight gap, made +0.020% before about 0.012% in costs (t 2.23, 2,571 days), and one such result among 15 is not surprising by chance.
+     - **Size: partly predictable.** Morning range averaged 0.67%. After the quietest third of 5-morning stretches it was 0.49%, after the busiest third 0.86% (correlation +0.40). Also Flat 0.57%, Cooling 0.79%, Jobs days 0.79%. Useful for sizing trades and stops, not by itself a way to make money.
+     - **Conclusion so far: 8 setups, an overnight test and a morning study have found no usable daytime direction in GLD price alone.** Do not move to paper trading on this evidence. Daniel to decide direction.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
