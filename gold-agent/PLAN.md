@@ -79,6 +79,9 @@ A loop of five parts sharing one permanent memory:
      - **Moves are biggest in the morning.** A half hour moves about 0.18% at 9:30 and about 0.08-0.09% from 12:30 on. Volume is highest at 9:30 (14%) and 15:30 (13%).
      - **Daytime direction looks close to a coin flip.** Earlier moves barely predict later ones (same way 49-52%, correlations under 0.06 either way). After a 0.5%+ half hour, the next half hour carries on 44-54% of the time, with no reliable average. No day of the week stands out.
      - Two half hours reached |t| of 2 (9:30 -2.01, 13:30 +2.34). With this many numbers that is expected by chance, so neither is treated as a finding.
+   - [x] Overnight hold test (Oct 31, setups/backtest_overnight.py, Jan 2016 - Jun 2026, unseen months untouched). Compounded totals: hold gold +258% (13.0% a year, worst drop -26%, return/risk 0.84); overnight at $0.02 a night +190% (10.7% a year, worst drop -18%, return/risk 0.89, t 2.87); overnight at $0.05 a night +77% (5.6% a year, return/risk 0.51, t 1.64); daytime at $0.02 -36%.
+     - **Not a clear win over holding gold.** It technically edges holding on return/risk, but by a tiny margin (no formal test of the difference), it earns less in total, and three extra cents of cost a night drop return/risk well below holding. It did lose less at its worst. After costs it was about flat in Flat markets (-0.008% a night, today's mood).
+     - Not adopted. Unseen months not used. Day trading stays the goal unless Daniel decides otherwise.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
