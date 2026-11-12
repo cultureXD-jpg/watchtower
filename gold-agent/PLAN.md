@@ -97,6 +97,9 @@ A loop of five parts sharing one permanent memory:
    - [x] News and sentiment batch (Nov 1, setups/backtest_sentiment.py, data in GOLD_HOME/sentiment). Bar: t 3+ and positive in both halves. **None passed.** Gold volatility spike 373 trades, +0.036R, t 0.52; stock fear spike 536, -0.030R, t -0.60; crowded big traders 1,257, +0.015R, t 0.51.
      - News not really tested: Alpaca had only about 40-60 gold headlines a year in 2018-2022. Headline tone gave 5 and 1 trades, busy news 15. Too few to judge. Economic surprises not tested (no free source of past forecasts).
    - **Checkpoint Nov 1: no setup has passed in any batch. Unseen months still untouched. Do not paper trade as if an edge exists.** Decision needed from Daniel.
+   - [x] Break and lower high (Nov 11, idea from @tradesbysci; rules fixed before the run, in setups/backtest_break_lower_high.py): 4-hour swing break, failed bounce (lower high / higher low), entry on breaking the bounce, stop past the bounce, 2R target. Measuring period, pass bar t 3+ and positive in both halves. **Neither version passed.**
+     - Day trade: 152 trades, +0.035R, t 0.84, halves -0.014R / +0.075R. The stops are wide (about $3.22) so 141 of 152 trades just closed at the close.
+     - Swing (up to 5 days): 132 trades, +0.145R, t 1.24, halves +0.079R / +0.202R, worst drop -9.5R. Positive in both halves but could easily be luck; most of it came from Flat-mood trades (+0.492R, 42 trades), which is too few to rely on.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
