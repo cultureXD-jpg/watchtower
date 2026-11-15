@@ -110,6 +110,14 @@ A loop of five parts sharing one permanent memory:
    - **Checkpoint Nov 15: about 180 tests, nothing beats simply holding.**
    - [x] Chart patterns (Nov 15, setups/backtest_chart_patterns.py): flag, double bottom/top, inside bar, failed breakout on 5/15/60-minute GLD bars, intraday, 2R target. 12 tests, **none passed**. Closest: 60-minute double bottom/top 76 trades, +0.113R, t 2.22, positive in both halves and on buys and shorts. On 5-minute bars, inside bar (4,910 trades, t -6.1) and failed breakout (3,322, t -5.2) reliably lose.
    - [x] Pattern scanner (Nov 15, setups/scanner.py, scikit-learn added to the venv): learned on 2016-2020, tested on 2021 - Jun 2026, predicting the next hour's direction at 20 times a day. **No pass.** Boosted trees: right 50.3% of the time, AUC 0.510, 5,013 trades, -0.011% each, t -2.85. Logistic regression: right 51.9%, AUC 0.524 (a faint signal), 1,314 trades, -0.001% each, t -0.12. Too faint to cover even $0.02/share.
+   - **Paid data shopping list (Nov 15, nothing bought; Daniel creates any account and pays):** cheapest first.
+     1. Free: Databento new-account credit ($125, expires after 6 months, no subscription). Gold futures (GC) 1-minute bars and a slice of trades / top-of-book (order flow). Get its free cost estimate before every download.
+     2. $49 one-time: finzdata GC history, every bar size, back-adjusted continuous from 2008. Only if the Databento credit falls short. Untick the $19.95/month updates.
+     3. $59.99 for one month: EODHD Fundamentals plan, economic events with actual, forecast and previous values from Dec 2019. Download, then cancel.
+     4. Unknown until estimated: Databento order-flow data beyond the free credit (pay as you go, per GB).
+     5. Not needed for backtests: EODHD All-in-One ($99.99/mo, same events), Databento live plans (about $179-199/mo), FirstRate GC (price not shown).
+     6. Most expensive, skipped for now: full news history (not priced).
+     - Recommended first round: items 1 and 3, about $60, at most about $110 with item 2.
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
