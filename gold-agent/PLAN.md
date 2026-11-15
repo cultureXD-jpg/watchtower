@@ -102,6 +102,9 @@ A loop of five parts sharing one permanent memory:
    - [x] Break and lower high (Nov 11, idea from @tradesbysci; rules fixed before the run, in setups/backtest_break_lower_high.py): 4-hour swing break, failed bounce (lower high / higher low), entry on breaking the bounce, stop past the bounce, 2R target. Measuring period, pass bar t 3+ and positive in both halves. **Neither version passed.**
      - Day trade: 152 trades, +0.035R, t 0.84, halves -0.014R / +0.075R. The stops are wide (about $3.22) so 141 of 152 trades just closed at the close.
      - Swing (up to 5 days): 132 trades, +0.145R, t 1.24, halves +0.079R / +0.202R, worst drop -9.5R. Positive in both halves but could easily be luck; most of it came from Flat-mood trades (+0.492R, 42 trades), which is too few to rely on.
+   - [x] Swing batch (Nov 15, rules fixed before the run, in setups/backtest_swing.py): 8 long/short setups on daily GLD bars, held days to weeks, Oct 2016 - Jun 2026. Pass bar t 3+ and positive in both halves. **None passed.** Hold GLD over the same days: +12.3% a year, return/risk 0.80.
+     - Pullback in trend 282 trades -0.018R t -0.49; 20-day breakout 112, +0.116R, t 0.77; quiet squeeze 36, +0.108R, t 0.62; fade a big day 64, -0.129R, t -1.16; 10/30 cross 98, +0.170R, t 0.97; 1-month momentum weekly 506, +0.012R, t 0.49; NR7 breakout 224, -0.011R, t -0.13; turn of month (long) 116, +0.087R, t 1.62.
+     - Pattern: longs made money and shorts lost in almost every setup, which mostly reflects gold rising. As full-time positions, the best (turn of month 0.39, 10/30 cross 0.24) were far below holding (0.80).
 4. [ ] Paper trader on the Alpaca paper account, using the guardrails above.
 5. [ ] Evaluator + learner, running unattended on watchtower.
 6. [ ] Real money: only after a long paper record and Daniel's explicit decision.
