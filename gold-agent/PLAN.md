@@ -4,6 +4,8 @@ Source of truth for the Gold Agent. Update it as steps finish. Started Oct 8, 20
 
 **Goal:** an agent that day trades gold on its own (paper money first), then other stocks later. No rush: building it correctly matters more than building it fast.
 
+**Goal widened (Nov 15, 2026, Daniel):** it does not have to be strict day trading. Holding gold for days or longer, going long or short, is fine if it is profitable. Simply holding GLD is the benchmark any such rule must beat.
+
 ## Vision
 
 A self-improving, memory-driven agent that learns from experience instead of only running fixed rules. It should:
