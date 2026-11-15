@@ -33,10 +33,17 @@ import statistics
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from common import COST, MID, SPLIT
+import csv
+
+from common import COST, GOLD_HOME, MID, SPLIT, SYMBOL
 from mood import load
 
-rows = [r for r in load() if r["date"] < SPLIT]
+if SYMBOL == "GLD":
+    rows = load()
+else:                      # other markets: adjusted daily bars from fetch_daily.py
+    with open(os.path.join(GOLD_HOME, "daily", f"{SYMBOL}.csv")) as f:
+        rows = [{"date": r["date"], **{k: float(r[k]) for k in "ohlc"}} for r in csv.DictReader(f)]
+rows = [r for r in rows if r["date"] < SPLIT]
 N, WARM = len(rows), 200
 O = [r["o"] for r in rows]
 H = [r["h"] for r in rows]
@@ -216,7 +223,7 @@ hold = [C[i] / C[i - 1] - 1 for i in range(WARM, N)]
 hy, hr, hd = yearly(hold)
 _, hr1, _ = yearly(hold[:half])
 _, hr2, _ = yearly(hold[half:])
-print(f"Measuring {days[0]} to {days[-1]}. Hold GLD: {hy:+.1%} a year, return/risk {hr:.2f} "
+print(f"Measuring {days[0]} to {days[-1]}. Hold {SYMBOL}: {hy:+.1%} a year, return/risk {hr:.2f} "
       f"(halves {hr1:.2f} / {hr2:.2f}), worst drop {hd:.0%}\n")
 print(f"{'Setup':26}{'trades':>7}{'avg R':>8}{'t':>7}{'half 1':>8}{'half 2':>8}{'long R':>12}{'short R':>13}"
       f"{'yearly':>8}{'ret/risk':>9}{'halves':>12}{'worst':>7}  pass")
