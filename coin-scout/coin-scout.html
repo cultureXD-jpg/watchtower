@@ -307,7 +307,7 @@ const IS_REMOTE = !IS_ENGINE && /^https?:$/.test(location.protocol);
 const SECRETS = ['heliusKey', 'tgToken'];
 const hasSecret = k => !!(CFG[k] || (CFG._has && CFG._has[k]));
 const hasKey = () => hasSecret('heliusKey');
-const VERSION = 'v32 · Oct 28';
+const VERSION = 'v33 · Nov 18';
 try{ document.getElementById('verTag').textContent = VERSION; }catch(e){}
 /* =====================================================================
    Coin Scout: scans new Solana coins, checks them, and paper-trades.
@@ -399,7 +399,7 @@ function fresh(){
     equity:[[now(), +CFG.startCash]], stats:{seen:0, quick:0, deep:0, bought:0}, deepTimes:[], running:false, lastScan:0, solUsd:150};
 }
 let S = Object.assign(fresh(), store.get('state') || {});
-S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.study = S.study || {queue:[], done:{}, wallets:{}, hits:[], runners:0, flops:0, times:[]}; S.life = S.life || {d:[], a:[]}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
+S.blacklist = S.blacklist || {}; S.strikes = S.strikes || {}; S.study = S.study || {queue:[], done:{}, wallets:{}, hits:[], runners:0, flops:0, times:[]}; S.life = S.life || {d:[], a:[]}; S.learn = S.learn || {watch:{}, rows:[], added:0}; S.funderQueue = S.funderQueue || []; S.rcQueue = S.rcQueue || [];
 let saveT = null, saveWarned = false;
 function save(){
   clearTimeout(saveT);
@@ -1377,7 +1377,7 @@ async function processOne(c, m){
   if (!m) return verdict(c, later('Not on DexScreener yet', '', 3));
   if (m.price > 0){
     const snap = {t:now(), price:m.price, liq:m.liq, mcap:m.mcap, vol1h:m.vol1h, buys1h:m.buys1h, sells1h:m.sells1h, ch5m:m.ch5m, ch1h:m.ch1h, ageMin:m.created ? Math.round((now() - m.created) / 60000) : null, dex:m.dex, curve:!!m.curve};
-    if (!c.p0){ c.p0 = m.price; c.t0 = now(); c.snap0 = snap; }
+    if (!c.p0){ c.p0 = m.price; c.t0 = now(); c.snap0 = snap; learnAdd(c, m); }
     c.snap = snap;
   }
   c.sym = m.sym || c.sym;
@@ -2159,11 +2159,57 @@ function lifeSellCheck(p){
   if (r.n >= LIFE.MIN_N && r.p >= LIFE.SELL_P) return 'most similar coins get dumped around this age (' + Math.round(r.p * 100) + '% died within ' + LIFE.SELL_WIN + ' min of being ' + Math.round(age) + ' min old)';
   return null;
 }
+/* =====================================================================
+   Learning log: every coin with a price is measured when first seen, then again 1, 6 and 24 hours later,
+   whether or not it was bought. Over time it shows which early numbers (liquidity, volume, buys vs sells)
+   go with coins that survive the day. Uses DexScreener only, no Helius credits.
+   ===================================================================== */
+const LEARN = {AT:[1, 6, 24], MAX_WATCH:6000, MAX_ROWS:8000, BATCH:600};
+function learnAdd(c, m){
+  const L = S.learn;
+  if (L.watch[c.mint] || Object.keys(L.watch).length >= LEARN.MAX_WATCH) return;
+  L.watch[c.mint] = {mint:c.mint, sym:m.sym || c.sym || '', src:c.src || '', t0:now(), p0:m.price, created:m.created || null, at:{},
+    f:{liq:m.liq, mcap:m.mcap, vol5m:m.vol5m, vol1h:m.vol1h, buys5m:m.buys5m, sells5m:m.sells5m, buys1h:m.buys1h, sells1h:m.sells1h,
+       ch5m:m.ch5m, ch1h:m.ch1h, ageMin:m.created ? Math.round((now() - m.created) / 60000) : null, dex:m.dex, curve:!!m.curve}};
+  L.added++;
+}
+let learning = false;
+async function learnStep(){
+  if (learning) return; learning = true;
+  try{
+    const L = S.learn, t = now();
+    const dueAt = w => LEARN.AT.find(h => !w.at[h] && t - w.t0 >= h * 3600e3);
+    const due = Object.values(L.watch).filter(w => dueAt(w)).sort((a, b) => a.t0 - b.t0).slice(0, LEARN.BATCH);
+    if (!due.length) return;
+    let mm; try{ mm = await dsPairs(due.map(w => w.mint)); }catch(e){ return; }
+    for (const w of due){
+      const h = dueAt(w), m = mm.get(w.mint);
+      w.at[h] = m && m.price ? {r:Math.round(m.price / w.p0 * 1000) / 1000, liq:m.liq, vol1h:m.vol1h, buys1h:m.buys1h, sells1h:m.sells1h} : {gone:true};
+      if (h === LEARN.AT[0]){
+        const c = S.seen[w.mint]; w.bot = c ? c.status : ''; w.why = c ? (c.reason || '') : '';
+        if (S.trades.some(x => x.mint === w.mint) || S.positions.some(x => x.mint === w.mint)) w.bot = 'bought';
+      }
+      /* a coin whose price data is gone is dead: no need to check it again */
+      if (h === LEARN.AT[LEARN.AT.length - 1] || w.at[h].gone){
+        const last = w.at[h];
+        w.alive = !last.gone && last.r >= 0.5 && (last.liq || 0) >= 5000;
+        w.done = t; L.rows.push(w); delete L.watch[w.mint];
+      }
+    }
+    if (L.rows.length > LEARN.MAX_ROWS) L.rows.splice(0, L.rows.length - LEARN.MAX_ROWS);
+    save();
+  } finally { learning = false; }
+}
+function learnNote(){
+  const L = S.learn; if (!L) return '';
+  const done = L.rows.length, alive = L.rows.filter(w => w.alive).length;
+  return ' · Learning log: ' + Object.keys(L.watch).length + ' coins followed, ' + done + ' finished' + (done ? ' (' + Math.round(alive / done * 100) + '% survived 24h)' : '');
+}
 function renderLife(){
   const el = $('#life'); if (!el) return;
   const L = S.life || {d:[], a:[]}, n = L.d.length + L.a.length;
   const med = median(L.d);
-  $('#lifeNote').textContent = n ? n + ' coins followed · ' + L.d.length + ' got dumped · ' + L.a.length + ' still alive after 2h' + (med != null ? ' · typical dump age ' + Math.round(med) + ' min' : '') : '';
+  $('#lifeNote').textContent = (n ? n + ' coins followed · ' + L.d.length + ' got dumped · ' + L.a.length + ' still alive after 2h' + (med != null ? ' · typical dump age ' + Math.round(med) + ' min' : '') : '') + learnNote();
   if (n < 10){ el.innerHTML = '<div class="muted" style="padding:6px 0">Collecting. It follows every coin that passes the quick checks for 2 hours and notes how old it was when it got dumped (fell 85%+). Give it a day.</div>'; return; }
   const rows = [];
   for (let a = 0; a < 120; a += 10){
@@ -2231,8 +2277,8 @@ function doSettings(n){
 }
 function doReset(){
   const running = S.running, keepBL = S.blacklist, keepStrikes = S.strikes;
-  const keepStudy = S.study, keepLife = S.life;
-  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.study = keepStudy; S.life = keepLife; S.funderQueue = []; S.rcQueue = [];
+  const keepStudy = S.study, keepLife = S.life, keepLearn = S.learn;
+  S = fresh(); S.running = running; S.blacklist = keepBL; S.strikes = keepStrikes; S.study = keepStudy; S.life = keepLife; S.learn = keepLearn; S.funderQueue = []; S.rcQueue = [];
   save(); render(); renderFeed();
 }
 function doSell(id){ const p = S.positions.find(x => x.id === id); if (p) closePos(p, 'you sold it by hand'); }
@@ -2243,7 +2289,7 @@ function exportData(){
   const pick = c => ({mint:c.mint, sym:c.sym, src:c.src, status:c.status, reason:c.reason, detail:c.detail, tries:c.tries, first:c.first, passedQuick:!!c.passedQuick,
     creator:c.creator, snap0:c.snap0, snap:c.snap, hi:c.hi, lo:c.lo, last:c.last, lastAt:c.lastAt, gone:c.gone, deep:c.deep && c.deep.res});
   return {app:'Coin Scout', version:VERSION, exportedAt:new Date().toISOString(), cfg, cash:S.cash, start:S.start, equityNow:equity(), stats:S.stats,
-    blacklist:S.blacklist, strikes:S.strikes, study:S.study, life:S.life,
+    blacklist:S.blacklist, strikes:S.strikes, study:S.study, life:S.life, learn:S.learn,
     rejects:S.rejects, trades:S.trades, positions:S.positions, equity:S.equity, log:S.log, coins:Object.values(S.seen).map(pick)};
 }
 /* the server calls these */
@@ -2432,6 +2478,7 @@ if (IS_REMOTE){
   (async () => { for (;;){ try{ await fastWatch(); }catch(e){} await sleep(1200); } })();
   setInterval(holderWatch, 30000);
   setInterval(trackSkipped, 2 * 60000);
+  setInterval(learnStep, 5 * 60000);
   setInterval(() => { studyStep().catch(() => {}); }, 45000);
   setInterval(trackSold, 60000);
   setInterval(solPrice, 10 * 60000);
